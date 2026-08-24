@@ -1,0 +1,4 @@
+project_id = "lectern-v2"
+
+[functions.process-lecture]
+verify_jwt = true
