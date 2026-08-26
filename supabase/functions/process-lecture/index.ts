@@ -5,7 +5,6 @@ const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-
 const fail = (message: string) => new Response(JSON.stringify({ error: message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 const transcriptionCost = (usage: any) => ((usage?.input_tokens ?? 0) * 1.25 + (usage?.output_tokens ?? 0) * 5) / 1_000_000;
 const notesCost = (usage: any) => { const cached = usage?.input_tokens_details?.cached_tokens ?? 0; return (((usage?.input_tokens ?? 0) - cached) * .4 + cached * .1 + (usage?.output_tokens ?? 0) * 1.6) / 1_000_000; };
-const maxCourseMaterialBytes = 5 * 1024 * 1024;
 const allowedAudio = new Set(['mp3', 'm4a', 'wav', 'webm', 'ogg', 'aac', 'flac']);
 const allowedMaterial = new Set(['pdf', 'pptx', 'txt']);
 const extension = (name: string) => name.toLowerCase().split('.').pop() ?? '';
@@ -37,8 +36,6 @@ Deno.serve(async request => {
   try {
     if (!synthesize_only) {
       if (!sources?.length || sources.length > 12 || sources.some(source => source.source_type === 'audio' ? !allowedAudio.has(extension(source.filename)) : !allowedMaterial.has(extension(source.filename)))) throw new Error('Upload up to 12 audio, PDF, PowerPoint, or text files.');
-      const { data: materialObjects, error } = await admin.schema('storage').from('objects').select('metadata').eq('bucket_id', 'lecture-files').in('name', sources.filter(source => source.source_type === 'material').map(source => source.storage_path));
-      if (error || (materialObjects ?? []).reduce((total, object) => total + Number((object.metadata as { size?: number }).size ?? 0), 0) > maxCourseMaterialBytes) throw new Error('Course materials can total at most 5 MB.');
       const { data: claim, error: claimError } = await userClient.rpc('claim_lecture', { p_lecture_id: lecture_id }).single();
       if (claimError || !claim) throw new Error(claimError?.message ?? 'Could not confirm your lecture allowance.');
       if (claim.kind === 'overage') {

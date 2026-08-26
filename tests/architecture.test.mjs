@@ -67,6 +67,7 @@ test('billing and source limits are enforced before model work starts', async ()
   const billing = await readFile('supabase/functions/billing/index.ts', 'utf8');
   const app = await readFile('src.tsx', 'utf8');
   const migration = await readFile('supabase/migrations/20260826000003_add_billing.sql', 'utf8');
+  const materialLimit = await readFile('supabase/migrations/20260826000004_replace_byte_limit_with_audio_limit.sql', 'utf8');
   assert.match(worker, /claim_lecture/);
   assert.match(worker, /billing\/meter_events/);
   assert.match(billing, /mode: 'subscription'/);
@@ -74,6 +75,8 @@ test('billing and source limits are enforced before model work starts', async ()
   assert.match(app, /returnUrl: `\$\{window\.location\.origin\}\$\{window\.location\.pathname\}`/);
   assert.match(migration, /file_size_limit = 26214400/);
   assert.match(migration, /char_length\(synthesis_prompt\) <= 1500/);
+  assert.match(materialLimit, /material_bytes > 5242880/);
+  assert.doesNotMatch(worker, /materialObjects/);
 });
 
 test('billing handles cancellations and failed invoices, and the UI separates saved sessions', async () => {
