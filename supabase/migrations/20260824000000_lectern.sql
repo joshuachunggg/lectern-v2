@@ -2,6 +2,7 @@ create table public.lectures (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
   title text not null check (char_length(title) between 1 and 200),
+  slide_mode text not null default 'text' check (slide_mode in ('text', 'original')),
   status text not null default 'ready' check (status in ('ready', 'transcribing', 'synthesizing', 'done', 'error')),
   status_message text not null default 'Ready to process.',
   transcript text,
