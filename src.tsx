@@ -11,6 +11,16 @@ if (!url || !key)
     "Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to .env.local.",
   );
 const supabase = createClient(url, key);
+const MAX_LECTURE_BYTES = 25 * 1024 * 1024;
+const MAX_PROMPT_CHARS = 1500;
+const MAX_AUDIO_SECONDS = 90 * 60;
+const AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "wav", "webm", "ogg", "aac", "flac"]);
+const audioDuration = (file: File) => new Promise<number>((resolve, reject) => {
+  const audio = document.createElement("audio"), url = URL.createObjectURL(file);
+  audio.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(audio.duration); };
+  audio.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`Could not read ${file.name}.`)); };
+  audio.src = url;
+});
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)
     .toString()
@@ -28,6 +38,7 @@ type Lecture = {
   synthesis_prompt: string;
 };
 type SavedPrompt = { id: string; name: string; prompt: string };
+type Billing = { active: boolean; included_used: number; free_used: boolean };
 
 function App() {
   const recorder = useRef<MediaRecorder | null>(null),
@@ -39,6 +50,7 @@ function App() {
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [authError, setAuthError] = useState(""),
+    [billing, setBilling] = useState<Billing | null>(null),
     [lectures, setLectures] = useState<Lecture[]>([]),
     [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]),
     [lecture, setLecture] = useState("Untitled lecture"),
@@ -73,6 +85,10 @@ function App() {
       .order("created_at", { ascending: false });
     setSavedPrompts(data ?? []);
   };
+  const loadBilling = async () => {
+    const { data } = await supabase.functions.invoke("billing", { body: { action: "status" } });
+    if (data) setBilling(data as Billing);
+  };
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -81,6 +97,7 @@ function App() {
       if (email) {
         loadLectures();
         loadSavedPrompts();
+        loadBilling();
       }
     });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -89,6 +106,7 @@ function App() {
       if (email) {
         loadLectures();
         loadSavedPrompts();
+        loadBilling();
       }
     });
     return () => {
@@ -114,7 +132,15 @@ function App() {
     if (mode === "signup")
       setAuthError("Check your email to confirm your account.");
   }
+  async function manageBilling() {
+    const action = billing?.active ? "portal" : "checkout";
+    const { data, error } = await supabase.functions.invoke("billing", { body: { action } });
+    if (error || !data?.url) return setStatus(error?.message ?? "Could not open billing.");
+    window.location.assign(data.url);
+  }
   async function upload(id: string, file: File) {
+    if (file.size > MAX_LECTURE_BYTES)
+      throw new Error("Each file must be 25 MB or smaller.");
     const path = `${id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
     const { error: uploadError } = await supabase.storage
       .from("lecture-files")
@@ -127,7 +153,7 @@ function App() {
       storage_path: path,
       filename: file.name,
       content_type: file.type || "application/octet-stream",
-      source_type: file.type.startsWith("audio/") ? "audio" : "material",
+      source_type: file.type.startsWith("audio/") || AUDIO_EXTENSIONS.has(file.name.toLowerCase().split(".").pop() ?? "") ? "audio" : "material",
     });
     if (error) throw error;
   }
@@ -159,6 +185,7 @@ function App() {
         throw new Error(body?.error ?? error.message);
       }
       await loadLectures();
+      await loadBilling();
       const { data } = await supabase
         .from("lectures")
         .select("notes,status_message")
@@ -179,9 +206,9 @@ function App() {
   async function toggleRecording() {
     if (recording) return recorder.current?.stop();
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true }),
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } }),
         chunks: Blob[] = [],
-        next = new MediaRecorder(stream);
+        next = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
       next.ondataavailable = (event) =>
         event.data.size && chunks.push(event.data);
       next.onstop = () => {
@@ -196,7 +223,7 @@ function App() {
       recorder.current = next;
       next.start();
       setSeconds(0);
-      timer.current = setInterval(() => setSeconds((value) => value + 1), 1000);
+      timer.current = setInterval(() => setSeconds((value) => { if (value + 1 >= MAX_AUDIO_SECONDS) { next.stop(); return MAX_AUDIO_SECONDS; } return value + 1; }), 1000);
       setRecording(true);
       setStatus("Recording");
     } catch {
@@ -236,6 +263,12 @@ function App() {
         : []),
     ];
     if (!sources.length) return;
+    if (sources.reduce((total, file) => total + file.size, 0) > MAX_LECTURE_BYTES)
+      return setStatus("A lecture can contain at most 25 MB of source files.");
+    if ((await Promise.all(sources.filter(file => AUDIO_EXTENSIONS.has(file.name.toLowerCase().split(".").pop() ?? "")).map(audioDuration))).reduce((total, seconds) => total + seconds, 0) > MAX_AUDIO_SECONDS)
+      return setStatus("A lecture can contain at most 90 minutes of audio.");
+    if (notePrompt.length > MAX_PROMPT_CHARS)
+      return setStatus("Custom note preferences are limited to 1,500 characters.");
     setProcessing(true);
     setNotes("");
     setStatus("Creating lecture session…");
@@ -287,6 +320,8 @@ function App() {
       );
     if (!added.length) return;
     try {
+      if ((await Promise.all(added.filter(file => AUDIO_EXTENSIONS.has(file.name.toLowerCase().split(".").pop() ?? "")).map(audioDuration))).reduce((total, seconds) => total + seconds, 0) > MAX_AUDIO_SECONDS)
+        return setStatus("Added audio can contain at most 90 minutes.");
       setProcessing(true);
       setStatus(`Uploading sources for ${contentSession.title}…`);
       for (const file of added) await upload(contentSession.id, file);
@@ -309,6 +344,8 @@ function App() {
   async function savePrompt() {
     const name = promptName.trim(), prompt = notePrompt.trim();
     if (!name || !prompt) return;
+    if (prompt.length > MAX_PROMPT_CHARS)
+      return setStatus("Custom note preferences are limited to 1,500 characters.");
     const { error } = await supabase.from("saved_prompts").insert({ name, prompt });
     if (error) return setStatus(error.message);
     setPromptName("");
@@ -416,7 +453,10 @@ function App() {
           lectern
         </a>
         <span className="privacy">
-          Signed in as {user} ·{" "}
+          {billing?.active ? `${billing.included_used}/24 lectures this month` : billing?.free_used ? "Subscription required" : "1 free lecture"} ·{" "}
+          <button className="sign-out" onClick={manageBilling}>
+            {billing?.active ? "Manage plan" : "Get Lectern for $10/mo"}
+          </button> · Signed in as {user} ·{" "}
           <button className="sign-out" onClick={() => supabase.auth.signOut()}>
             Sign out
           </button>
@@ -514,6 +554,7 @@ function App() {
             <textarea
               id="materials"
               value={materials}
+              maxLength={100000}
               onChange={(event) => setMaterials(event.target.value)}
               placeholder="Paste the syllabus, an outline, or lecture context…"
             />
@@ -657,7 +698,7 @@ function App() {
           </label>
           <label>
             Or paste a transcript
-            <textarea name="transcript" placeholder="Paste an additional lecture transcript…" />
+            <textarea name="transcript" maxLength={100000} placeholder="Paste an additional lecture transcript…" />
           </label>
           <button disabled={processing}>Add content and rebuild notes</button>
         </form>
@@ -673,7 +714,7 @@ function App() {
         <textarea
           id="note-prompt"
           value={notePrompt}
-          maxLength={4000}
+          maxLength={MAX_PROMPT_CHARS}
           onChange={(event) => setNotePrompt(event.target.value)}
           placeholder="For example: prioritize exam-ready definitions, use a Cornell-note layout, and include worked examples."
         />

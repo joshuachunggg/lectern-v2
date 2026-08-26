@@ -5,6 +5,25 @@ const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-
 const fail = (message: string) => new Response(JSON.stringify({ error: message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 const transcriptionCost = (usage: any) => ((usage?.input_tokens ?? 0) * 1.25 + (usage?.output_tokens ?? 0) * 5) / 1_000_000;
 const notesCost = (usage: any) => { const cached = usage?.input_tokens_details?.cached_tokens ?? 0; return (((usage?.input_tokens ?? 0) - cached) * .4 + cached * .1 + (usage?.output_tokens ?? 0) * 1.6) / 1_000_000; };
+const maxSourceBytes = 25 * 1024 * 1024;
+const allowedAudio = new Set(['mp3', 'm4a', 'wav', 'webm', 'ogg', 'aac', 'flac']);
+const allowedMaterial = new Set(['pdf', 'pptx', 'txt']);
+const extension = (name: string) => name.toLowerCase().split('.').pop() ?? '';
+const transcriptionProvider = Deno.env.get('TRANSCRIPTION_PROVIDER') === 'groq' ? 'groq' : 'openai';
+const transcribe = async (file: Blob, filename: string) => {
+  const form = new FormData(); form.append('file', file, filename);
+  if (transcriptionProvider === 'groq') {
+    form.append('model', 'whisper-large-v3'); form.append('response_format', 'verbose_json');
+    const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('GROQ_API_KEY')}` }, body: form });
+    if (!response.ok) throw new Error(`Groq transcription failed: ${await response.text()}`);
+    const result = await response.json(), seconds = Number(result.duration ?? result.segments?.at(-1)?.end ?? 0);
+    return { text: result.text, usage: { provider: 'groq', seconds }, cost: seconds * .111 / 3600 };
+  }
+  form.append('model', 'gpt-transcribe');
+  const response = await openai('/audio/transcriptions', { method: 'POST', body: form });
+  if (!response.ok) throw new Error(`Transcription failed: ${await response.text()}`);
+  const result = await response.json(); return { text: result.text, usage: { provider: 'openai', usage: result.usage ?? {} }, cost: transcriptionCost(result.usage) };
+};
 
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -16,14 +35,25 @@ Deno.serve(async request => {
   const { data: lecture } = await admin.from('lectures').select('*').eq('id', lecture_id).eq('owner_id', user.id).single(); if (!lecture) return fail('Lecture not found.');
   const { data: sources } = await admin.from('lecture_sources').select('*').eq('lecture_id', lecture_id).order('created_at');
   try {
+    if (!synthesize_only) {
+      if (!sources?.length || sources.length > 12 || sources.some(source => source.source_type === 'audio' ? !allowedAudio.has(extension(source.filename)) : !allowedMaterial.has(extension(source.filename)))) throw new Error('Upload up to 12 audio, PDF, PowerPoint, or text files.');
+      const { data: objects, error } = await admin.schema('storage').from('objects').select('metadata').eq('bucket_id', 'lecture-files').in('name', sources.map(source => source.storage_path));
+      if (error || (objects ?? []).reduce((total, object) => total + Number((object.metadata as { size?: number }).size ?? 0), 0) > maxSourceBytes) throw new Error('A lecture can contain at most 25 MB of source files.');
+      const { data: claim, error: claimError } = await userClient.rpc('claim_lecture', { p_lecture_id: lecture_id }).single();
+      if (claimError || !claim) throw new Error(claimError?.message ?? 'Could not confirm your lecture allowance.');
+      if (claim.kind === 'overage') {
+        const response = await fetch('https://api.stripe.com/v1/billing/meter_events', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('STRIPE_SECRET_KEY')}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ event_name: 'lectern_lecture', 'payload[stripe_customer_id]': claim.stripe_customer_id, 'payload[value]': '1', identifier: lecture_id }) });
+        if (!response.ok) throw new Error('Could not record the $0.50 overage. Please try again.');
+      }
+    }
     if (!synthesize_only) await admin.from('lectures').update({ status: 'transcribing', status_message: 'Transcribing lecture…' }).eq('id', lecture_id);
     const transcripts: string[] = [], materials: string[] = [], files: { type: 'input_file'; file_data: string; filename: string }[] = [], transcriptionUsage: unknown[] = synthesize_only ? lecture.api_usage?.transcription ?? [] : []; let estimatedCost = synthesize_only ? Number(lecture.estimated_cost_usd ?? 0) : 0;
     for (const source of sources ?? []) {
       if (synthesize_only && source.source_type === 'audio') continue;
       const { data: file, error } = await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file) throw error ?? new Error(`Could not download ${source.filename}.`);
-      if (source.source_type === 'audio') { const form = new FormData(); form.append('file', file, source.filename); form.append('model', 'gpt-transcribe'); const response = await openai('/audio/transcriptions', { method: 'POST', body: form }); if (!response.ok) throw new Error(`Transcription failed: ${await response.text()}`); const result = await response.json(); transcripts.push(result.text); transcriptionUsage.push(result.usage ?? {}); estimatedCost += transcriptionCost(result.usage); }
+      if (source.source_type === 'audio') { const result = await transcribe(file, source.filename); transcripts.push(result.text); transcriptionUsage.push(result.usage); estimatedCost += result.cost; }
       else if (lecture.slide_mode === 'original' || !source.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: new Uint8Array(await file.arrayBuffer()).toBase64(), filename: source.filename });
-      else materials.push(`## ${source.filename}\n${await file.text()}`);
+      else { const text = await file.text(); if (text.length > 100_000) throw new Error('Text materials must be 100,000 characters or fewer.'); materials.push(`## ${source.filename}\n${text}`); }
     }
     const transcript = synthesize_only ? lecture.transcript ?? '' : transcripts.join('\n\n'), context = materials.join('\n\n') || '[No text materials were supplied.]';
     if (synthesize_only && !transcript) throw new Error('No saved transcript is available for this session.');

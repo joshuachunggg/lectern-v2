@@ -2,3 +2,9 @@ project_id = "lectern-v2"
 
 [functions.process-lecture]
 verify_jwt = true
+
+[functions.billing]
+verify_jwt = true
+
+[functions.stripe-webhook]
+verify_jwt = false

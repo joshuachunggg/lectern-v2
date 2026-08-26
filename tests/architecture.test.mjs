@@ -14,7 +14,9 @@ test('cloud worker uses OpenAI APIs and no local database', async () => {
   assert.match(worker, /synthesize_only && source\.source_type === 'audio'/);
   assert.match(worker, /part\.type === 'output_text'/);
   assert.match(worker, /Note synthesis returned no text/);
-  assert.doesNotMatch(worker, /sqlite|whisper|codex exec/i);
+  assert.match(worker, /TRANSCRIPTION_PROVIDER/);
+  assert.match(worker, /whisper-large-v3/);
+  assert.doesNotMatch(worker, /sqlite|codex exec/i);
 });
 
 test('new lectures save optional note preferences', async () => {
@@ -58,4 +60,24 @@ test('saved sessions can be deleted with their uploaded source files', async () 
   assert.match(app, /from\("lecture-files"\)\.remove\(paths\)/);
   assert.match(app, /from\("lectures"\)\.delete\(\)\.eq\("id", session\.id\)/);
   assert.match(app, /aria-label=\{`Delete \$\{session\.title\}`\}/);
+});
+
+test('billing and limits are enforced before model work starts', async () => {
+  const worker = await readFile('supabase/functions/process-lecture/index.ts', 'utf8');
+  const billing = await readFile('supabase/functions/billing/index.ts', 'utf8');
+  const migration = await readFile('supabase/migrations/20260826000003_add_billing.sql', 'utf8');
+  assert.match(worker, /maxSourceBytes/);
+  assert.match(worker, /claim_lecture/);
+  assert.match(worker, /billing\/meter_events/);
+  assert.match(billing, /mode: 'subscription'/);
+  assert.match(migration, /file_size_limit = 26214400/);
+  assert.match(migration, /char_length\(synthesis_prompt\) <= 1500/);
+});
+
+test('browser recordings are compact and capped at a lecture length', async () => {
+  const app = await readFile('src.tsx', 'utf8');
+  assert.match(app, /MAX_AUDIO_SECONDS = 90 \* 60/);
+  assert.match(app, /audioBitsPerSecond: 32000/);
+  assert.match(app, /channelCount: 1/);
+  assert.match(app, /at most 90 minutes of audio/);
 });
