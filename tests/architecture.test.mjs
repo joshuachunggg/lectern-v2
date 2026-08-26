@@ -8,9 +8,22 @@ test('cloud worker uses OpenAI APIs and no local database', async () => {
   assert.match(worker, /gpt-transcribe/);
   assert.match(worker, /\/responses/);
   assert.match(worker, /estimated_cost_usd/);
+  assert.match(worker, /max_output_tokens: 12000/);
+  assert.match(worker, /User note preferences/);
   assert.match(worker, /part\.type === 'output_text'/);
   assert.match(worker, /Note synthesis returned no text/);
   assert.doesNotMatch(worker, /sqlite|whisper|codex exec/i);
+});
+
+test('new lectures save optional note preferences', async () => {
+  const app = await readFile('src.tsx', 'utf8');
+  const migration = await readFile(
+    'supabase/migrations/20260826000001_add_synthesis_prompt.sql',
+    'utf8',
+  );
+  assert.match(app, /synthesis_prompt: notePrompt\.trim\(\)/);
+  assert.match(app, /id="note-prompt"/);
+  assert.match(migration, /synthesis_prompt/);
 });
 
 test('edge function accepts browser CORS preflights', async () => {

@@ -46,6 +46,7 @@ function App() {
     [audioFiles, setAudioFiles] = useState<File[]>([]),
     [files, setFiles] = useState<File[]>([]),
     [materials, setMaterials] = useState(""),
+    [notePrompt, setNotePrompt] = useState(""),
     [status, setStatus] = useState("Ready to record"),
     [processing, setProcessing] = useState(false),
     [notes, setNotes] = useState("");
@@ -215,7 +216,11 @@ function App() {
     try {
       const { data: created, error } = await supabase
         .from("lectures")
-        .insert({ title: lecture, slide_mode: slideMode })
+        .insert({
+          title: lecture,
+          slide_mode: slideMode,
+          synthesis_prompt: notePrompt.trim(),
+        })
         .select()
         .single();
       if (error || !created)
@@ -475,6 +480,16 @@ function App() {
             Transcribe your lecture, then combine it with slides into structured
             notes.
           </p>
+          <label className="synthesis-prompt" htmlFor="note-prompt">
+            Note preferences <small>optional</small>
+          </label>
+          <textarea
+            id="note-prompt"
+            value={notePrompt}
+            maxLength={4000}
+            onChange={(event) => setNotePrompt(event.target.value)}
+            placeholder="For example: prioritize exam-ready definitions, use a Cornell-note layout, and include worked examples."
+          />
           <div className="progress" aria-live="polite">
             <strong>{status}</strong>
             <ol>

@@ -229,6 +229,19 @@ textarea {
   color: #526061;
   line-height: 1.5;
 }
+.synthesis-prompt {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  margin-top: 12px;
+  color: #526061;
+  font-size: 12px;
+  font-weight: bold;
+}
+.synthesis > textarea {
+  min-height: 96px;
+  margin-top: 6px;
+}
 .synthesis button {
   margin-top: auto;
 }
