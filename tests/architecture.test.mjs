@@ -10,6 +10,8 @@ test('cloud worker uses OpenAI APIs and no local database', async () => {
   assert.match(worker, /estimated_cost_usd/);
   assert.match(worker, /max_output_tokens: 12000/);
   assert.match(worker, /User note preferences/);
+  assert.match(worker, /synthesize_only/);
+  assert.match(worker, /synthesize_only && source\.source_type === 'audio'/);
   assert.match(worker, /part\.type === 'output_text'/);
   assert.match(worker, /Note synthesis returned no text/);
   assert.doesNotMatch(worker, /sqlite|whisper|codex exec/i);
@@ -23,6 +25,8 @@ test('new lectures save optional note preferences', async () => {
   );
   assert.match(app, /synthesis_prompt: notePrompt\.trim\(\)/);
   assert.match(app, /id="note-prompt"/);
+  assert.match(app, /Redo AI synthesis/);
+  assert.match(app, /synthesize_only: synthesizeOnly/);
   assert.match(migration, /synthesis_prompt/);
 });
 

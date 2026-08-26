@@ -25,6 +25,7 @@ type Lecture = {
   status: string;
   status_message: string;
   notes: string | null;
+  synthesis_prompt: string;
   estimated_cost_usd: number | null;
 };
 
@@ -109,7 +110,11 @@ function App() {
     });
     if (error) throw error;
   }
-  async function processLecture(id: string, message: string) {
+  async function processLecture(
+    id: string,
+    message: string,
+    synthesizeOnly = false,
+  ) {
     setProcessing(true);
     setNotes("");
     setStatus(message);
@@ -123,7 +128,7 @@ function App() {
     }, 1500);
     try {
       const { error } = await supabase.functions.invoke("process-lecture", {
-        body: { lecture_id: id },
+        body: { lecture_id: id, synthesize_only: synthesizeOnly },
       });
       if (error) {
         const body =
@@ -284,6 +289,24 @@ function App() {
         error instanceof Error
           ? error.message
           : "Could not add the transcript.",
+      );
+    }
+  }
+  async function redoNotes(session: Lecture, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const prompt = String(
+      new FormData(event.currentTarget).get("synthesis_prompt") ?? "",
+    ).trim();
+    const { error } = await supabase
+      .from("lectures")
+      .update({ synthesis_prompt: prompt })
+      .eq("id", session.id);
+    if (error) return setStatus(error.message);
+    try {
+      await processLecture(session.id, "Rebuilding study notes…", true);
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : "Could not rebuild the notes.",
       );
     }
   }
@@ -588,6 +611,19 @@ function App() {
                       placeholder="Paste an additional lecture transcript…"
                     />
                     <button disabled={processing}>Add transcript</button>
+                  </form>
+                </details>
+                <details>
+                  <summary>Redo notes</summary>
+                  <form onSubmit={(event) => redoNotes(session, event)}>
+                    <textarea
+                      name="synthesis_prompt"
+                      maxLength={4000}
+                      defaultValue={session.synthesis_prompt}
+                      placeholder="Optional note preferences…"
+                    />
+                    <button disabled={processing}>Redo AI synthesis</button>
+                    <small>Uses saved sources and transcript; no transcription.</small>
                   </form>
                 </details>
               </article>
