@@ -4,6 +4,7 @@
   --card: #fffdf7;
   --orange: #e45d32;
   --line: #d8d3c6;
+  --focus: #f4c2ae;
 }
 * {
   box-sizing: border-box;
@@ -13,6 +14,7 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.4;
 }
 main {
   max-width: 1180px;
@@ -25,6 +27,26 @@ header {
   align-items: center;
   border-bottom: 1px solid var(--line);
   padding-bottom: 20px;
+}
+button,
+input,
+textarea,
+summary,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+input,
+textarea {
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease, transform 150ms ease;
+}
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 header nav {
   display: flex;
@@ -69,7 +91,6 @@ header nav a.active {
 }
 .profile summary:hover { box-shadow: 0 6px 16px rgb(18 34 35 / 0.13); transform: translateY(-1px); }
 .profile[open] summary { border-bottom-right-radius: 4px; border-bottom-left-radius: 4px; }
-.profile summary:focus-visible, header nav a:focus-visible { outline: 3px solid #f4c2ae; outline-offset: 2px; }
 .profile summary::-webkit-details-marker { display: none; }
 .profile summary span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .profile summary small { margin-top: 3px; }
@@ -140,8 +161,10 @@ small {
 .card {
   min-height: 365px;
   border: 1px solid var(--line);
+  border-radius: 10px;
   background: var(--card);
   padding: 24px;
+  box-shadow: 0 1px 2px rgb(18 34 35 / 0.04);
 }
 .card-heading {
   align-self: stretch;
@@ -215,7 +238,7 @@ small {
 }
 button {
   border: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--ink);
   color: white;
   cursor: pointer;
@@ -223,6 +246,13 @@ button {
     bold 14px Arial,
     sans-serif;
   padding: 13px 16px;
+}
+button:not(:disabled):hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+button:not(:disabled):active {
+  transform: translateY(0);
 }
 button.record {
   background: var(--orange);
@@ -254,11 +284,14 @@ audio {
   align-items: center;
   min-height: 130px;
   margin-top: 30px;
-  border: 1px dashed #a9aaa3;
+  border: 1px dashed #9ca6a3;
+  border-radius: 8px;
+  background: #fffefa;
   color: var(--ink);
   cursor: pointer;
   text-align: center;
 }
+.dropzone:hover { border-color: var(--orange); background: #fffaf6; }
 .dropzone input {
   display: none;
 }
@@ -291,7 +324,15 @@ textarea {
     13px/1.4 Arial,
     sans-serif;
   padding: 9px;
-  outline-color: var(--orange);
+  border-radius: 6px;
+}
+textarea:focus,
+.auth input:focus,
+.session-title input:focus,
+.save-prompt input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgb(228 93 50 / 0.14);
+  outline: 0;
 }
 .synthesis {
   display: flex;
@@ -390,7 +431,9 @@ footer {
   min-height: 130px;
   padding: 18px;
   border: 1px solid var(--line);
+  border-radius: 8px;
   background: var(--card);
+  box-shadow: 0 1px 2px rgb(18 34 35 / 0.04);
 }
 .session-title {
   display: flex;
@@ -472,7 +515,9 @@ footer {
   margin: auto;
   padding: 26px;
   border: 1px solid var(--line);
+  border-radius: 12px;
   background: var(--card);
+  box-shadow: 0 18px 45px rgb(18 34 35 / 0.2);
 }
 .modal::backdrop {
   background: rgb(38 56 58 / 0.45);
@@ -543,7 +588,9 @@ footer {
   margin: auto;
   padding: 36px clamp(22px, 5vw, 58px);
   border: 1px solid var(--line);
+  border-radius: 12px;
   background: var(--card);
+  box-shadow: 0 18px 45px rgb(18 34 35 / 0.2);
   overflow: auto;
 }
 .notes::backdrop {
@@ -675,7 +722,9 @@ footer {
   margin-top: 56px;
   padding: 34px;
   border: 1px solid var(--line);
+  border-radius: 12px;
   background: var(--card);
+  box-shadow: 0 12px 30px rgb(18 34 35 / 0.08);
 }
 .auth h1 {
   margin: 8px 0 24px;
@@ -693,6 +742,7 @@ footer {
     16px Arial,
     sans-serif;
   padding: 12px;
+  border-radius: 6px;
 }
 .auth button {
   margin: 10px 8px 0 0;
