@@ -26,18 +26,21 @@ type Lecture = {
   status_message: string;
   notes: string | null;
   synthesis_prompt: string;
-  estimated_cost_usd: number | null;
 };
+type SavedPrompt = { id: string; name: string; prompt: string };
 
 function App() {
   const recorder = useRef<MediaRecorder | null>(null),
     timer = useRef<ReturnType<typeof setInterval> | null>(null),
-    notesDialog = useRef<HTMLDialogElement | null>(null);
+    notesDialog = useRef<HTMLDialogElement | null>(null),
+    contentDialog = useRef<HTMLDialogElement | null>(null),
+    promptDialog = useRef<HTMLDialogElement | null>(null);
   const [user, setUser] = useState<string | null>(null),
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [authError, setAuthError] = useState(""),
     [lectures, setLectures] = useState<Lecture[]>([]),
+    [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]),
     [lecture, setLecture] = useState("Untitled lecture"),
     [slideMode, setSlideMode] = useState<SlideMode>("text"),
     [recording, setRecording] = useState(false),
@@ -48,6 +51,11 @@ function App() {
     [files, setFiles] = useState<File[]>([]),
     [materials, setMaterials] = useState(""),
     [notePrompt, setNotePrompt] = useState(""),
+    [promptName, setPromptName] = useState(""),
+    [promptSession, setPromptSession] = useState<Lecture | null>(null),
+    [contentSession, setContentSession] = useState<Lecture | null>(null),
+    [editingTitle, setEditingTitle] = useState<string | null>(null),
+    [titleDraft, setTitleDraft] = useState(""),
     [status, setStatus] = useState("Ready to record"),
     [processing, setProcessing] = useState(false),
     [notes, setNotes] = useState("");
@@ -58,17 +66,30 @@ function App() {
       .order("created_at", { ascending: false });
     setLectures(data ?? []);
   };
+  const loadSavedPrompts = async () => {
+    const { data } = await supabase
+      .from("saved_prompts")
+      .select("id,name,prompt")
+      .order("created_at", { ascending: false });
+    setSavedPrompts(data ?? []);
+  };
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       const email = data.user?.email ?? null;
       setUser(email);
-      if (email) loadLectures();
+      if (email) {
+        loadLectures();
+        loadSavedPrompts();
+      }
     });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       const email = session?.user.email ?? null;
       setUser(email);
-      if (email) loadLectures();
+      if (email) {
+        loadLectures();
+        loadSavedPrompts();
+      }
     });
     return () => {
       data.subscription.unsubscribe();
@@ -250,18 +271,28 @@ function App() {
       setProcessing(false);
     }
   }
-  async function addToLecture(
-    session: Lecture,
-    event: ChangeEvent<HTMLInputElement>,
-  ) {
-    const added = Array.from(event.target.files ?? []);
-    event.target.value = "";
+  async function addToLecture(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!contentSession) return;
+    const form = event.currentTarget,
+      data = new FormData(form),
+      added = [
+        ...Array.from(data.getAll("audio")).filter((file): file is File => file instanceof File && file.size > 0),
+        ...Array.from(data.getAll("materials")).filter((file): file is File => file instanceof File && file.size > 0),
+      ],
+      transcript = String(data.get("transcript") ?? "").trim();
+    if (transcript)
+      added.push(
+        new File([transcript], "pasted-transcript.txt", { type: "text/plain" }),
+      );
     if (!added.length) return;
     try {
       setProcessing(true);
-      setStatus(`Uploading sources for ${session.title}…`);
-      for (const file of added) await upload(session.id, file);
-      await processLecture(session.id, "Sources added — rebuilding notes…");
+      setStatus(`Uploading sources for ${contentSession.title}…`);
+      for (const file of added) await upload(contentSession.id, file);
+      contentDialog.current?.close();
+      form.reset();
+      await processLecture(contentSession.id, "Sources added — rebuilding notes…");
     } catch (error) {
       setStatus(
         error instanceof Error ? error.message : "Could not upload the files.",
@@ -269,40 +300,30 @@ function App() {
       setProcessing(false);
     }
   }
-  async function addTranscript(
-    session: Lecture,
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-    const form = event.currentTarget,
-      text = String(new FormData(form).get("transcript") ?? "").trim();
-    if (!text) return;
-    try {
-      await upload(
-        session.id,
-        new File([text], "pasted-transcript.txt", { type: "text/plain" }),
-      );
-      form.reset();
-      await processLecture(session.id, "Transcript added — rebuilding notes…");
-    } catch (error) {
-      setStatus(
-        error instanceof Error
-          ? error.message
-          : "Could not add the transcript.",
-      );
-    }
+  function openPrompt(session: Lecture | null) {
+    setPromptSession(session);
+    setNotePrompt(session?.synthesis_prompt ?? notePrompt);
+    setPromptName("");
+    promptDialog.current?.showModal();
   }
-  async function redoNotes(session: Lecture, event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const prompt = String(
-      new FormData(event.currentTarget).get("synthesis_prompt") ?? "",
-    ).trim();
+  async function savePrompt() {
+    const name = promptName.trim(), prompt = notePrompt.trim();
+    if (!name || !prompt) return;
+    const { error } = await supabase.from("saved_prompts").insert({ name, prompt });
+    if (error) return setStatus(error.message);
+    setPromptName("");
+    await loadSavedPrompts();
+  }
+  async function redoNotes() {
+    if (!promptSession) return;
+    const session = promptSession, prompt = notePrompt.trim();
     const { error } = await supabase
       .from("lectures")
       .update({ synthesis_prompt: prompt })
       .eq("id", session.id);
     if (error) return setStatus(error.message);
     try {
+      promptDialog.current?.close();
       await processLecture(session.id, "Rebuilding study notes…", true);
     } catch (error) {
       setStatus(
@@ -310,8 +331,8 @@ function App() {
       );
     }
   }
-  async function rename(session: Lecture) {
-    const title = window.prompt("Lecture name", session.title)?.trim();
+  async function saveTitle(session: Lecture) {
+    const title = titleDraft.trim();
     if (!title || title === session.title) return;
     const { error } = await supabase
       .from("lectures")
@@ -319,6 +340,7 @@ function App() {
       .eq("id", session.id);
     if (error) return setStatus(error.message);
     await loadLectures();
+    setEditingTitle(null);
   }
   async function deleteLecture(session: Lecture) {
     if (!window.confirm(`Delete “${session.title}” and its source files?`))
@@ -418,80 +440,84 @@ function App() {
             <span>01</span>
             <p>Lecture audio</p>
           </div>
-          <div className={`record-light ${recording ? "live" : ""}`} />
-          <p className="time">{clock(seconds)}</p>
-          <p className="status" aria-live="polite">
-            {status}
-          </p>
-          <button
-            className={recording ? "stop" : "record"}
-            onClick={toggleRecording}
-          >
-            <i />
-            {recording ? "Stop recording" : "Start recording"}
-          </button>
-          <label className="audio-upload">
-            <input
-              type="file"
-              accept="audio/*,.m4a,.mp3,.wav,.webm"
-              multiple
-              onChange={addAudio}
-            />
-            Choose audio files
-          </label>
-          {audioFiles.length > 0 && (
-            <small>
-              {audioFiles.length} file{audioFiles.length === 1 ? "" : "s"} ready
-              — uploaded in order as lecture-01, lecture-02, …
-            </small>
-          )}
-          {audioUrl && (
-            <audio controls src={audioUrl}>
-              Your browser cannot play this recording.
-            </audio>
-          )}
+          <div className="card-body">
+            <div className={`record-light ${recording ? "live" : ""}`} />
+            <p className="time">{clock(seconds)}</p>
+            <p className="status" aria-live="polite">
+              {status}
+            </p>
+            <button
+              className={recording ? "stop" : "record"}
+              onClick={toggleRecording}
+            >
+              <i />
+              {recording ? "Stop recording" : "Start recording"}
+            </button>
+            <label className="audio-upload">
+              <input
+                type="file"
+                accept="audio/*,.m4a,.mp3,.wav,.webm"
+                multiple
+                onChange={addAudio}
+              />
+              Choose audio files
+            </label>
+            {audioFiles.length > 0 && (
+              <small>
+                {audioFiles.length} file{audioFiles.length === 1 ? "" : "s"} ready
+                — uploaded in order as lecture-01, lecture-02, …
+              </small>
+            )}
+            {audioUrl && (
+              <audio controls src={audioUrl}>
+                Your browser cannot play this recording.
+              </audio>
+            )}
+          </div>
         </article>
         <article className="materials card">
           <div className="card-heading">
             <span>02</span>
             <p>Course materials</p>
           </div>
-          <label className="dropzone">
-            <input
-              type="file"
-              accept=".pdf,.pptx,.txt"
-              multiple
-              onChange={addFiles}
+          <div className="card-body">
+            <label className="dropzone">
+              <input
+                type="file"
+                accept=".pdf,.pptx,.txt"
+                multiple
+                onChange={addFiles}
+              />
+              <strong>Drop slides here</strong>
+              <small>PDF, PowerPoint (.pptx), or plain text</small>
+            </label>
+            <label className="materials-label">
+              <input
+                type="checkbox"
+                checked={slideMode === "original"}
+                onChange={(event) =>
+                  setSlideMode(event.target.checked ? "original" : "text")
+                }
+              />{" "}
+              Let AI inspect original slides (visual)
+            </label>
+            {files.length > 0 && (
+              <ul>
+                {files.map((file, index) => (
+                  <li key={`${file.name}-${index}`}>{file.name}</li>
+                ))}
+              </ul>
+            )}
+            <label className="materials-label" htmlFor="materials">
+              Or paste material
+            </label>
+            <textarea
+              id="materials"
+              value={materials}
+              onChange={(event) => setMaterials(event.target.value)}
+              placeholder="Paste the syllabus, an outline, or lecture context…"
             />
-            <strong>Drop slides here</strong>
-            <small>PDF, PowerPoint (.pptx), or plain text</small>
-          </label>
-          <label className="materials-label">
-            <input
-              type="checkbox"
-              checked={slideMode === "original"}
-              onChange={(event) =>
-                setSlideMode(event.target.checked ? "original" : "text")
-              }
-            />{" "}
-            Let AI inspect original slides (visual)
-          </label>
-          {files.length > 0 && (
-            <ul>
-              {files.map((file, index) => (
-                <li key={`${file.name}-${index}`}>{file.name}</li>
-              ))}
-            </ul>
-          )}
-          <label className="materials-label" htmlFor="materials">
-            Or paste material
-          </label>
-          <textarea
-            id="materials"
-            value={materials}
-            onChange={(event) => setMaterials(event.target.value)}
-            placeholder="Paste the syllabus, an outline, or lecture context…"
-          />
+          </div>
         </article>
         <article className="synthesis card">
           <div className="card-heading">
@@ -503,16 +529,9 @@ function App() {
             Transcribe your lecture, then combine it with slides into structured
             notes.
           </p>
-          <label className="synthesis-prompt" htmlFor="note-prompt">
-            Note preferences <small>optional</small>
-          </label>
-          <textarea
-            id="note-prompt"
-            value={notePrompt}
-            maxLength={4000}
-            onChange={(event) => setNotePrompt(event.target.value)}
-            placeholder="For example: prioritize exam-ready definitions, use a Cornell-note layout, and include worked examples."
-          />
+          <button className="secondary-action" onClick={() => openPrompt(null)}>
+            {notePrompt ? "Edit custom note prompt" : "Add custom note prompt"}
+          </button>
           <div className="progress" aria-live="polite">
             <strong>{status}</strong>
             <ol>
@@ -564,73 +583,129 @@ function App() {
                     <path d="M4 7h16M10 11v6m4-6v6M9 7l1-2h4l1 2m-9 0 1 13h10l1-13" />
                   </svg>
                 </button>
-                <strong>{session.title}</strong>
+                <div className="session-title">
+                  {editingTitle === session.id ? (
+                    <input
+                      aria-label="Lecture title"
+                      autoFocus
+                      value={titleDraft}
+                      onChange={(event) => setTitleDraft(event.target.value)}
+                      onBlur={() => saveTitle(session)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") saveTitle(session);
+                        if (event.key === "Escape") setEditingTitle(null);
+                      }}
+                    />
+                  ) : (
+                    <strong>{session.title}</strong>
+                  )}
+                  <button
+                    className="edit-session"
+                    aria-label={`Rename ${session.title}`}
+                    title="Rename session"
+                    onClick={() => {
+                      setTitleDraft(session.title);
+                      setEditingTitle(session.id);
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m4 16 9.5-9.5 3 3L7 19H4v-3Zm11-10.5 1.5-1.5 3 3L18 8.5l-3-3Z" />
+                    </svg>
+                  </button>
+                </div>
                 <small>
                   {session.status === "done"
                     ? "Notes ready"
                     : session.status_message}
                 </small>
-                {session.estimated_cost_usd !== null && (
-                  <small>
-                    Estimated API cost: $
-                    {Number(session.estimated_cost_usd).toFixed(4)}
-                  </small>
-                )}
                 <div>
-                  <button onClick={() => rename(session)}>Rename</button>
                   {session.notes && (
                     <button onClick={() => setNotes(session.notes ?? "")}>
                       Open notes
                     </button>
                   )}
-                  <label className="add-slides">
-                    <input
-                      type="file"
-                      accept=".pdf,.pptx,.txt"
-                      multiple
-                      onChange={(event) => addToLecture(session, event)}
-                    />
-                    Add slides
-                  </label>
-                  <label className="add-slides">
-                    <input
-                      type="file"
-                      accept="audio/*,.m4a,.mp3,.wav,.webm"
-                      multiple
-                      onChange={(event) => addToLecture(session, event)}
-                    />
-                    Add audio
-                  </label>
+                  <button
+                    onClick={() => {
+                      setContentSession(session);
+                      contentDialog.current?.showModal();
+                    }}
+                  >
+                    Add additional content
+                  </button>
+                  <button onClick={() => openPrompt(session)}>Redo notes</button>
                 </div>
-                <details>
-                  <summary>Paste transcript</summary>
-                  <form onSubmit={(event) => addTranscript(session, event)}>
-                    <textarea
-                      name="transcript"
-                      required
-                      placeholder="Paste an additional lecture transcript…"
-                    />
-                    <button disabled={processing}>Add transcript</button>
-                  </form>
-                </details>
-                <details>
-                  <summary>Redo notes</summary>
-                  <form onSubmit={(event) => redoNotes(session, event)}>
-                    <textarea
-                      name="synthesis_prompt"
-                      maxLength={4000}
-                      defaultValue={session.synthesis_prompt}
-                      placeholder="Optional note preferences…"
-                    />
-                    <button disabled={processing}>Redo AI synthesis</button>
-                    <small>Uses saved sources and transcript; no transcription.</small>
-                  </form>
-                </details>
               </article>
             ))}
           </div>
         </section>
       )}
+      <dialog className="modal" ref={contentDialog}>
+        <form onSubmit={addToLecture}>
+          <div className="modal-heading">
+            <h2>Add additional content</h2>
+            <button type="button" onClick={() => contentDialog.current?.close()}>
+              Close
+            </button>
+          </div>
+          <label>
+            Audio files
+            <input name="audio" type="file" accept="audio/*,.m4a,.mp3,.wav,.webm" multiple />
+          </label>
+          <label>
+            Slides or materials
+            <input name="materials" type="file" accept=".pdf,.ppt,.pptx,.txt" multiple />
+          </label>
+          <label>
+            Or paste a transcript
+            <textarea name="transcript" placeholder="Paste an additional lecture transcript…" />
+          </label>
+          <button disabled={processing}>Add content and rebuild notes</button>
+        </form>
+      </dialog>
+      <dialog className="modal" ref={promptDialog}>
+        <div className="modal-heading">
+          <h2>Custom note prompt</h2>
+          <button type="button" onClick={() => promptDialog.current?.close()}>
+            Close
+          </button>
+        </div>
+        <label htmlFor="note-prompt">Optional instructions for the AI</label>
+        <textarea
+          id="note-prompt"
+          value={notePrompt}
+          maxLength={4000}
+          onChange={(event) => setNotePrompt(event.target.value)}
+          placeholder="For example: prioritize exam-ready definitions, use a Cornell-note layout, and include worked examples."
+        />
+        {savedPrompts.length > 0 && (
+          <div className="saved-prompts">
+            <small>Saved prompts</small>
+            {savedPrompts.map((prompt) => (
+              <button key={prompt.id} type="button" onClick={() => setNotePrompt(prompt.prompt)}>
+                {prompt.name}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="save-prompt">
+          <input
+            value={promptName}
+            onChange={(event) => setPromptName(event.target.value)}
+            placeholder="Name this prompt"
+            maxLength={100}
+          />
+          <button type="button" onClick={savePrompt} disabled={!promptName.trim() || !notePrompt.trim()}>
+            Save prompt
+          </button>
+        </div>
+        {promptSession ? (
+          <button disabled={processing} onClick={redoNotes}>
+            Redo AI synthesis
+          </button>
+        ) : (
+          <button onClick={() => promptDialog.current?.close()}>Use this prompt</button>
+        )}
+      </dialog>
       {notes && (
         <dialog
           className="notes"

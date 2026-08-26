@@ -27,7 +27,23 @@ test('new lectures save optional note preferences', async () => {
   assert.match(app, /id="note-prompt"/);
   assert.match(app, /Redo AI synthesis/);
   assert.match(app, /synthesize_only: synthesizeOnly/);
+  assert.match(app, /Add additional content/);
+  assert.match(app, /function openPrompt\(session: Lecture \| null\)/);
+  assert.match(app, /from\("saved_prompts"\)/);
+  assert.doesNotMatch(app, /Paste transcript/);
+  assert.doesNotMatch(app, /Estimated API cost/);
   assert.match(migration, /synthesis_prompt/);
+});
+
+test('saved prompts are private to the signed-in user', async () => {
+  const migration = await readFile(
+    'supabase/migrations/20260826000002_add_saved_prompts.sql',
+    'utf8',
+  );
+  assert.match(migration, /create table public\.saved_prompts/);
+  assert.match(migration, /owner_id uuid not null/);
+  assert.match(migration, /enable row level security/);
+  assert.match(migration, /owner_id = auth\.uid\(\)/);
 });
 
 test('edge function accepts browser CORS preflights', async () => {
