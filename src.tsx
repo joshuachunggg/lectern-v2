@@ -124,7 +124,13 @@ function App() {
       const { error } = await supabase.functions.invoke("process-lecture", {
         body: { lecture_id: id },
       });
-      if (error) throw error;
+      if (error) {
+        const body =
+          error.context instanceof Response
+            ? await error.context.json().catch(() => null)
+            : null;
+        throw new Error(body?.error ?? error.message);
+      }
       await loadLectures();
       const { data } = await supabase
         .from("lectures")

@@ -20,7 +20,7 @@ Deno.serve(async request => {
     const transcripts: string[] = [], materials: string[] = [], files: { type: 'input_file'; file_data: string; filename: string }[] = [], transcriptionUsage: unknown[] = []; let estimatedCost = 0;
     for (const source of sources ?? []) {
       const { data: file, error } = await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file) throw error ?? new Error(`Could not download ${source.filename}.`);
-      if (source.source_type === 'audio') { const form = new FormData(); form.append('file', file, source.filename); form.append('model', 'gpt-4o-mini-transcribe'); const response = await openai('/audio/transcriptions', { method: 'POST', body: form }); if (!response.ok) throw new Error(`Transcription failed: ${await response.text()}`); const result = await response.json(); transcripts.push(result.text); transcriptionUsage.push(result.usage ?? {}); estimatedCost += transcriptionCost(result.usage); }
+      if (source.source_type === 'audio') { const form = new FormData(); form.append('file', file, source.filename); form.append('model', 'gpt-transcribe'); const response = await openai('/audio/transcriptions', { method: 'POST', body: form }); if (!response.ok) throw new Error(`Transcription failed: ${await response.text()}`); const result = await response.json(); transcripts.push(result.text); transcriptionUsage.push(result.usage ?? {}); estimatedCost += transcriptionCost(result.usage); }
       else if (lecture.slide_mode === 'original' || !source.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: new Uint8Array(await file.arrayBuffer()).toBase64(), filename: source.filename });
       else materials.push(`## ${source.filename}\n${await file.text()}`);
     }
