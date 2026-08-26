@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:pages": "tsc --noEmit && vite build --base=/lectern-v2/ --outDir docs",
     "test": "node --test"
   },
   "dependencies": {
