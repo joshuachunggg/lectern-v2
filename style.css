@@ -307,6 +307,25 @@ ul {
   font-size: 13px;
   line-height: 1.7;
 }
+.queued-materials > div,
+.queued-materials li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.queued-materials > div { margin-top: 10px; }
+.queued-materials ul { margin-top: 4px; }
+.queued-materials li { padding: 2px 0; }
+.queued-materials li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queued-materials button {
+  flex: none;
+  padding: 3px 0;
+  color: var(--muted, #526061);
+  background: transparent;
+  font-size: 11px;
+  text-decoration: underline;
+}
 .materials-label {
   display: block;
   margin: 15px 0 7px;

@@ -13,6 +13,7 @@ if (!url || !key)
 const supabase = createClient(url, key);
 const MAX_PROMPT_CHARS = 1500;
 const MAX_COURSE_MATERIAL_BYTES = 5 * 1024 * 1024;
+const materialSize = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 const MAX_AUDIO_SECONDS = 90 * 60;
 const AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "wav", "webm", "ogg", "aac", "flac"]);
 const audioDuration = (file: File) => new Promise<number>((resolve, reject) => {
@@ -254,6 +255,9 @@ function App() {
     event.preventDefault();
     queueMaterials(Array.from(event.dataTransfer.files));
   }
+  function removeMaterial(index: number) {
+    setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  }
   function addAudio(event: ChangeEvent<HTMLInputElement>) {
     const added = Array.from(event.target.files ?? []);
     if (added.length) {
@@ -418,6 +422,7 @@ function App() {
   const canProcess = Boolean(
     audio || audioFiles.length || files.length || materials.trim(),
   );
+  const courseMaterialBytes = files.reduce((total, file) => total + file.size, 0);
   const stage =
     status.includes("Uploading") ||
     status.includes("Creating") ||
@@ -563,11 +568,14 @@ function App() {
               Let AI inspect original slides (visual)
             </label>
             {files.length > 0 && (
-              <ul>
-                {files.map((file, index) => (
-                  <li key={`${file.name}-${index}`}>{file.name}</li>
-                ))}
-              </ul>
+              <div className="queued-materials">
+                <div><small>{materialSize(courseMaterialBytes)} of 5 MB queued</small><button type="button" onClick={() => setFiles([])}>Clear</button></div>
+                <ul>
+                  {files.map((file, index) => (
+                    <li key={`${file.name}-${index}`}><span>{file.name}</span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeMaterial(index)}>Remove</button></li>
+                  ))}
+                </ul>
+              </div>
             )}
             <label className="materials-label" htmlFor="materials">
               Or paste material
