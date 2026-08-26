@@ -8,6 +8,8 @@ test('cloud worker uses OpenAI APIs and no local database', async () => {
   assert.match(worker, /gpt-transcribe/);
   assert.match(worker, /\/responses/);
   assert.match(worker, /estimated_cost_usd/);
+  assert.match(worker, /part\.type === 'output_text'/);
+  assert.match(worker, /Note synthesis returned no text/);
   assert.doesNotMatch(worker, /sqlite|whisper|codex exec/i);
 });
 

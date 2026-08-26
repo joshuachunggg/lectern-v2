@@ -28,8 +28,9 @@ Deno.serve(async request => {
     await admin.from('lectures').update({ status: 'synthesizing', status_message: 'Writing study notes…', transcript }).eq('id', lecture_id);
     const response = await openai('/responses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'gpt-4.1-mini', input: [{ role: 'user', content: [{ type: 'input_text', text: `Create accurate study notes from this lecture transcript and course material. ${lecture.slide_mode === 'original' ? 'Inspect each supplied slide file for visual content.' : 'Use text content only; ignore visual layout and images.'} Include an outline, definitions, examples, instructor emphasis, recap, and five active-recall questions. Do not invent facts.\n\nTRANSCRIPT\n${transcript || '[No audio supplied.]'}\n\nMATERIALS\n${context}` }, ...files] }] }) });
     if (!response.ok) throw new Error(`Note synthesis failed: ${await response.text()}`);
-    const result = await response.json(); estimatedCost += notesCost(result.usage);
-    await admin.from('lectures').update({ status: 'done', status_message: 'Study notes are ready.', notes: result.output_text ?? 'No notes were generated.', api_usage: { transcription: transcriptionUsage, notes: result.usage ?? {} }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id);
+    const result = await response.json(), notes = (result.output_text ?? result.output?.flatMap((item: any) => item.content ?? []).filter((part: any) => part.type === 'output_text').map((part: any) => part.text).join('') ?? '').trim(); estimatedCost += notesCost(result.usage);
+    if (!notes) throw new Error(`Note synthesis returned no text${result.incomplete_details?.reason ? ` (${result.incomplete_details.reason})` : ''}.`);
+    await admin.from('lectures').update({ status: 'done', status_message: 'Study notes are ready.', notes, api_usage: { transcription: transcriptionUsage, notes: result.usage ?? {} }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id);
     return Response.json({ status: 'done' }, { headers: corsHeaders });
   } catch (error) { const message = error instanceof Error ? error.message : 'Processing failed.'; await admin.from('lectures').update({ status: 'error', status_message: message }).eq('id', lecture_id); return fail(message); }
 });
