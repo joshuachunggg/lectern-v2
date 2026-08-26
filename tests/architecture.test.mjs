@@ -77,6 +77,17 @@ test('billing and limits are enforced before model work starts', async () => {
   assert.match(migration, /char_length\(synthesis_prompt\) <= 1500/);
 });
 
+test('billing handles cancellations and failed invoices, and the UI separates saved sessions', async () => {
+  const webhook = await readFile('supabase/functions/stripe-webhook/index.ts', 'utf8');
+  const app = await readFile('src.tsx', 'utf8');
+  assert.match(webhook, /customer\.subscription\./);
+  assert.match(webhook, /invoice\.payment_failed/);
+  assert.match(webhook, /subscription_status: 'past_due'/);
+  assert.match(app, /#saved-sessions/);
+  assert.match(app, /<details className="profile">/);
+  assert.match(app, /lectures remaining this month/);
+});
+
 test('browser recordings are compact and capped at a lecture length', async () => {
   const app = await readFile('src.tsx', 'utf8');
   assert.match(app, /MAX_AUDIO_SECONDS = 90 \* 60/);

@@ -50,6 +50,7 @@ function App() {
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [authError, setAuthError] = useState(""),
+    [page, setPage] = useState(() => window.location.hash === "#saved-sessions" ? "saved" : "new"),
     [billing, setBilling] = useState<Billing | null>(null),
     [lectures, setLectures] = useState<Lecture[]>([]),
     [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]),
@@ -113,6 +114,11 @@ function App() {
       data.subscription.unsubscribe();
       if (timer.current) clearInterval(timer.current);
     };
+  }, []);
+  useEffect(() => {
+    const updatePage = () => setPage(window.location.hash === "#saved-sessions" ? "saved" : "new");
+    window.addEventListener("hashchange", updatePage);
+    return () => window.removeEventListener("hashchange", updatePage);
   }, []);
   useEffect(() => {
     if (notes) notesDialog.current?.showModal();
@@ -449,20 +455,24 @@ function App() {
   return (
     <main>
       <header>
-        <a className="brand" href="/">
+        <a className="brand" href="#new-session">
           lectern
         </a>
-        <span className="privacy">
-          {billing?.active ? `${billing.included_used}/24 lectures this month` : billing?.free_used ? "Subscription required" : "1 free lecture"} ·{" "}
-          <button className="sign-out" onClick={manageBilling}>
-            {billing?.active ? "Manage plan" : "Get Lectern for $10/mo"}
-          </button> · Signed in as {user} ·{" "}
-          <button className="sign-out" onClick={() => supabase.auth.signOut()}>
-            Sign out
-          </button>
-        </span>
+        <nav aria-label="Workspace">
+          <a className={page === "new" ? "active" : ""} href="#new-session">New session</a>
+          <a className={page === "saved" ? "active" : ""} href="#saved-sessions">Saved sessions</a>
+        </nav>
+        <details className="profile">
+          <summary><span>{user}</span><small>{billing?.active ? "Paid plan" : "Free plan"}</small></summary>
+          <div>
+            <p>{billing?.active ? `${Math.max(0, 24 - billing.included_used)} lectures remaining this month` : `${billing?.free_used ? 0 : 1} free lecture remaining`}</p>
+            <button className="sign-out" onClick={manageBilling}>Manage plan</button>
+            <button className="sign-out" onClick={() => supabase.auth.signOut()}>Sign out</button>
+          </div>
+        </details>
       </header>
-      <section className="intro">
+      {page === "new" && <>
+      <section className="intro" id="new-session">
         <p className="eyebrow">New session</p>
         <input
           aria-label="Lecture title"
@@ -608,10 +618,11 @@ function App() {
           </small>
         </article>
       </section>
-      {lectures.length > 0 && (
-        <section className="history">
+      </>}
+      {page === "saved" && (
+        <section className="history" id="saved-sessions">
           <p className="eyebrow">Saved sessions</p>
-          <div className="saved-session-list">
+          {lectures.length ? <div className="saved-session-list">
             {lectures.map((session) => (
               <article className="saved-session" key={session.id}>
                 <button
@@ -678,6 +689,7 @@ function App() {
               </article>
             ))}
           </div>
+          : <p className="empty-sessions">No saved sessions yet.</p>}
         </section>
       )}
       <dialog className="modal" ref={contentDialog}>

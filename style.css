@@ -26,6 +26,49 @@ header {
   border-bottom: 1px solid var(--line);
   padding-bottom: 20px;
 }
+header nav {
+  display: flex;
+  gap: 18px;
+  margin-left: auto;
+  margin-right: 24px;
+}
+header nav a {
+  color: #526061;
+  font-size: 14px;
+  text-decoration: none;
+}
+header nav a.active {
+  color: var(--ink);
+  font-weight: bold;
+}
+.profile {
+  position: relative;
+}
+.profile summary {
+  display: grid;
+  min-width: 190px;
+  cursor: pointer;
+  list-style: none;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-size: 13px;
+}
+.profile summary::-webkit-details-marker { display: none; }
+.profile summary span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile summary small { margin-top: 3px; }
+.profile > div {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  width: 240px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: 0 8px 20px rgb(18 34 35 / 0.12);
+}
+.profile p { margin: 0 0 12px; color: #526061; font-size: 13px; line-height: 1.4; }
+.profile .sign-out { display: block; margin-top: 9px; }
 .brand {
   color: var(--ink);
   font-family: Georgia, serif;
@@ -281,6 +324,15 @@ footer {
   main {
     padding: 18px;
   }
+  header {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  header nav {
+    order: 3;
+    width: 100%;
+    margin: 0;
+  }
   .intro {
     padding: 50px 0 30px;
   }
@@ -305,8 +357,9 @@ footer {
   display: none;
 }
 .history {
-  margin-top: 34px;
+  margin: 76px 0 34px;
 }
+.empty-sessions { color: #526061; }
 .saved-session-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));

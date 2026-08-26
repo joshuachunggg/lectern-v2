@@ -25,5 +25,6 @@ Deno.serve(async request => {
     const end = object.lines?.data?.[0]?.period?.end;
     await admin.from('billing_accounts').update({ subscription_status: 'active', included_used: 0, period_end: end ? new Date(end * 1000).toISOString() : null, updated_at: new Date().toISOString() }).eq('stripe_customer_id', object.customer);
   }
+  if (event.type === 'invoice.payment_failed') await admin.from('billing_accounts').update({ subscription_status: 'past_due', updated_at: new Date().toISOString() }).eq('stripe_customer_id', object.customer);
   return new Response('ok');
 });
