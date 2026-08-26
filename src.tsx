@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import "./style.css";
@@ -234,12 +234,25 @@ function App() {
       setStatus("Microphone access is required to record.");
     }
   }
+  function queueMaterials(added: File[]) {
+    if (!added.length) return;
+    setFiles((current) => {
+      const next = [...current, ...added];
+      if (next.reduce((total, file) => total + file.size, 0) > MAX_COURSE_MATERIAL_BYTES) {
+        setStatus("Course materials can total at most 5 MB.");
+        return current;
+      }
+      setStatus(`${added.length} course material${added.length === 1 ? "" : "s"} ready — uploaded when you make study notes.`);
+      return next;
+    });
+  }
   function addFiles(event: ChangeEvent<HTMLInputElement>) {
-    setFiles((current) => [
-      ...current,
-      ...Array.from(event.target.files ?? []),
-    ]);
+    queueMaterials(Array.from(event.target.files ?? []));
     event.target.value = "";
+  }
+  function dropFiles(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    queueMaterials(Array.from(event.dataTransfer.files));
   }
   function addAudio(event: ChangeEvent<HTMLInputElement>) {
     const added = Array.from(event.target.files ?? []);
@@ -529,14 +542,14 @@ function App() {
             <p>Course materials</p>
           </div>
           <div className="card-body">
-            <label className="dropzone">
+            <label className="dropzone" onDragOver={(event) => event.preventDefault()} onDrop={dropFiles}>
               <input
                 type="file"
                 accept=".pdf,.pptx,.txt"
                 multiple
                 onChange={addFiles}
               />
-              <strong>Drop slides here</strong>
+              <strong>Drop or choose slides</strong>
               <small>PDF, PowerPoint (.pptx), or plain text</small>
             </label>
             <label className="materials-label">
