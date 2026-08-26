@@ -62,12 +62,11 @@ test('saved sessions can be deleted with their uploaded source files', async () 
   assert.match(app, /aria-label=\{`Delete \$\{session\.title\}`\}/);
 });
 
-test('billing and limits are enforced before model work starts', async () => {
+test('billing and source limits are enforced before model work starts', async () => {
   const worker = await readFile('supabase/functions/process-lecture/index.ts', 'utf8');
   const billing = await readFile('supabase/functions/billing/index.ts', 'utf8');
   const app = await readFile('src.tsx', 'utf8');
   const migration = await readFile('supabase/migrations/20260826000003_add_billing.sql', 'utf8');
-  assert.match(worker, /maxSourceBytes/);
   assert.match(worker, /claim_lecture/);
   assert.match(worker, /billing\/meter_events/);
   assert.match(billing, /mode: 'subscription'/);

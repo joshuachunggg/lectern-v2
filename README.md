@@ -13,7 +13,7 @@ Cloud version of Lectern. The original local v1 remains separate and unchanged.
 
 In Supabase Dashboard → Authentication → URL Configuration, add `http://localhost:5173/**` and `https://joshuachunggg.github.io/lectern-v2/**` to Redirect URLs. Set the Site URL to the GitHub Pages URL after its first deployment.
 
-The browser uploads to private Supabase Storage, Supabase Auth/RLS enforces ownership, and the Edge Function holds the OpenAI and Stripe keys. Each account receives one free lecture; the $10/month subscription includes 24 lectures, then Stripe meters $0.50 per lecture. A lecture is limited to 12 approved source files and 25 MB total; pasted text is capped at 100,000 characters and custom preferences at 1,500 characters. It transcribes audio with `gpt-transcribe` and generates notes with the Responses API.
+The browser uploads to private Supabase Storage, Supabase Auth/RLS enforces ownership, and the Edge Function holds the OpenAI and Stripe keys. Each account receives one free lecture; the $10/month subscription includes 24 lectures, then Stripe meters $0.50 per lecture. A lecture is limited to 12 approved source files, 90 minutes of audio, and 5 MB of course materials; pasted text is capped at 100,000 characters and custom preferences at 1,500 characters. Storage also has a 250 MB per-file safety ceiling. It transcribes audio with `gpt-transcribe` and generates notes with the Responses API.
 
 ## Optional Groq transcription test
 

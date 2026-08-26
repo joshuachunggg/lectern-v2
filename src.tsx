@@ -11,8 +11,8 @@ if (!url || !key)
     "Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to .env.local.",
   );
 const supabase = createClient(url, key);
-const MAX_LECTURE_BYTES = 25 * 1024 * 1024;
 const MAX_PROMPT_CHARS = 1500;
+const MAX_COURSE_MATERIAL_BYTES = 5 * 1024 * 1024;
 const MAX_AUDIO_SECONDS = 90 * 60;
 const AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "wav", "webm", "ogg", "aac", "flac"]);
 const audioDuration = (file: File) => new Promise<number>((resolve, reject) => {
@@ -145,8 +145,6 @@ function App() {
     window.location.assign(data.url);
   }
   async function upload(id: string, file: File) {
-    if (file.size > MAX_LECTURE_BYTES)
-      throw new Error("Each file must be 25 MB or smaller.");
     const path = `${id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
     const { error: uploadError } = await supabase.storage
       .from("lecture-files")
@@ -269,8 +267,8 @@ function App() {
         : []),
     ];
     if (!sources.length) return;
-    if (sources.reduce((total, file) => total + file.size, 0) > MAX_LECTURE_BYTES)
-      return setStatus("A lecture can contain at most 25 MB of source files.");
+    if (files.reduce((total, file) => total + file.size, 0) > MAX_COURSE_MATERIAL_BYTES)
+      return setStatus("Course materials can total at most 5 MB.");
     if ((await Promise.all(sources.filter(file => AUDIO_EXTENSIONS.has(file.name.toLowerCase().split(".").pop() ?? "")).map(audioDuration))).reduce((total, seconds) => total + seconds, 0) > MAX_AUDIO_SECONDS)
       return setStatus("A lecture can contain at most 90 minutes of audio.");
     if (notePrompt.length > MAX_PROMPT_CHARS)
