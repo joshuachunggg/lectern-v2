@@ -15,7 +15,7 @@ Deno.serve(async request => {
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const client = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: token } } });
     const { data: { user } } = await client.auth.getUser(); if (!user) throw new Error('Sign in required.');
-    const { action } = await request.json();
+    const { action, returnUrl: requestedReturnUrl } = await request.json();
     const { data: account } = await admin.from('billing_accounts').select('*').eq('owner_id', user.id).maybeSingle();
     if (action === 'status') return Response.json({ active: ['active', 'trialing'].includes(account?.subscription_status ?? ''), included_used: account?.included_used ?? 0, free_used: account?.free_used ?? false }, { headers: cors });
     let customer = account?.stripe_customer_id;
@@ -24,14 +24,15 @@ Deno.serve(async request => {
       customer = created.id;
       await admin.from('billing_accounts').upsert({ owner_id: user.id, stripe_customer_id: customer });
     }
-    const origin = request.headers.get('origin') ?? 'http://localhost:5173';
+    const origin = request.headers.get('origin') ?? 'http://localhost:5173', returnUrl = new URL(typeof requestedReturnUrl === 'string' ? requestedReturnUrl : origin);
+    if (returnUrl.origin !== origin) throw new Error('Invalid return URL.');
     if (action === 'portal') {
-      const session = await stripe('/billing_portal/sessions', new URLSearchParams({ customer, return_url: origin }));
+      const session = await stripe('/billing_portal/sessions', new URLSearchParams({ customer, return_url: returnUrl.href }));
       return Response.json({ url: session.url }, { headers: cors });
     }
     if (action !== 'checkout') throw new Error('Invalid billing action.');
     if (['active', 'trialing'].includes(account?.subscription_status ?? '')) throw new Error('Your subscription is already active.');
-    const session = await stripe('/checkout/sessions', new URLSearchParams({ mode: 'subscription', customer, success_url: `${origin}?billing=success`, cancel_url: `${origin}?billing=cancelled`, 'line_items[0][price]': Deno.env.get('STRIPE_BASE_PRICE_ID')!, 'line_items[0][quantity]': '1', 'line_items[1][price]': Deno.env.get('STRIPE_OVERAGE_PRICE_ID')!, 'metadata[owner_id]': user.id, 'subscription_data[metadata][owner_id]': user.id }));
+    const session = await stripe('/checkout/sessions', new URLSearchParams({ mode: 'subscription', customer, success_url: `${returnUrl.href}?billing=success`, cancel_url: `${returnUrl.href}?billing=cancelled`, 'line_items[0][price]': Deno.env.get('STRIPE_BASE_PRICE_ID')!, 'line_items[0][quantity]': '1', 'line_items[1][price]': Deno.env.get('STRIPE_OVERAGE_PRICE_ID')!, 'metadata[owner_id]': user.id, 'subscription_data[metadata][owner_id]': user.id }));
     return Response.json({ url: session.url }, { headers: cors });
   } catch (error) {
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Billing failed.' }), { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });

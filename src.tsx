@@ -134,7 +134,7 @@ function App() {
   }
   async function manageBilling() {
     const action = billing?.active ? "portal" : "checkout";
-    const { data, error } = await supabase.functions.invoke("billing", { body: { action } });
+    const { data, error } = await supabase.functions.invoke("billing", { body: { action, returnUrl: `${window.location.origin}${window.location.pathname}` } });
     if (error || !data?.url) return setStatus(error?.message ?? "Could not open billing.");
     window.location.assign(data.url);
   }
