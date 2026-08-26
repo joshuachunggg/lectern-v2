@@ -84,6 +84,7 @@ small {
   padding: 24px;
 }
 .card-heading {
+  align-self: stretch;
   display: flex;
   justify-content: center;
   gap: 10px;
@@ -122,6 +123,10 @@ small {
 }
 .recorder .card-body {
   align-items: center;
+  transform: translateY(-18px);
+}
+.materials .card-body {
+  justify-content: flex-start;
 }
 .record-light {
   width: 88px;
