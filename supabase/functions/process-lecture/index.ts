@@ -44,9 +44,11 @@ Deno.serve(async request => {
       if (!sources?.length || sources.length > 12 || sources.some(source => source.source_type === 'audio' ? !allowedAudio.has(extension(source.filename)) : !allowedMaterial.has(extension(source.filename)))) throw new Error('Upload up to 12 audio, PDF, PowerPoint, or text files.');
       const { data: claim, error: claimError } = await admin.rpc('claim_lecture_for_owner_v2', { p_lecture_id: lecture_id, p_owner_id: user.id }).single();
       if (claimError || !claim) throw new Error(claimError?.message ?? 'Could not confirm your lecture allowance.');
-      if (claim.kind === 'overage') {
+      if (claim.kind === 'overage' && !lecture.metered_at) {
         const response = await fetch('https://api.stripe.com/v1/billing/meter_events', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('STRIPE_SECRET_KEY')}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ event_name: 'lectern_lecture', 'payload[stripe_customer_id]': claim.stripe_customer_id, 'payload[value]': '1', identifier: lecture_id }) });
-        if (!response.ok) throw new Error('Could not record the $0.50 overage. Please try again.');
+        const meterError = response.ok ? '' : await response.text();
+        if (!response.ok && !/duplicate.*identifier|identifier.*already exists/i.test(meterError)) throw new Error(`Could not record the $0.50 overage: ${meterError}`);
+        await admin.from('lectures').update({ metered_at: new Date().toISOString() }).eq('id', lecture_id);
       }
     }
     if (!synthesize_only) await admin.from('lectures').update({ status: 'transcribing', status_message: 'Transcribing lecture…' }).eq('id', lecture_id);
