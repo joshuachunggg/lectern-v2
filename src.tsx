@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { ChangeEvent, DragEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import "./style.css";
 
 const url = import.meta.env.VITE_SUPABASE_URL,
@@ -812,7 +813,7 @@ function App() {
             </div>
           </div>
           <article className="notes-content">
-            <ReactMarkdown>{notes}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{notes}</ReactMarkdown>
           </article>
         </dialog>
       )}
