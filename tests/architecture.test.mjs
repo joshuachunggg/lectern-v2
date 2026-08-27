@@ -152,6 +152,8 @@ test('browser recordings are compact and capped at a lecture length', async () =
   assert.match(app, /MAX_AUDIO_SECONDS = 90 \* 60/);
   assert.match(app, /MAX_TRANSCRIPTION_FILE_BYTES = 24 \* 1024 \* 1024/);
   assert.match(app, /new AudioContext\(\{ sampleRate: 16000 \}\)/);
+  assert.match(app, /0x52494646/);
+  assert.match(app, /repairWav/);
   assert.match(app, /chunkAudio\(file\)/);
   assert.match(app, /async function chunkStoredAudio/);
   assert.match(app, /audioBitsPerSecond: 32000/);
