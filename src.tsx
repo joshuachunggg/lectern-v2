@@ -137,6 +137,8 @@ function App() {
             options: { emailRedirectTo: redirectTo },
           });
     if (result.error) return setAuthError(result.error.message);
+    if (mode === "signup" && !result.data.user?.identities?.length)
+      return setAuthError("An account already exists for this email. Sign in instead.");
     if (mode === "signup")
       setAuthError("Check your email to confirm your account.");
   }

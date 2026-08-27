@@ -48,10 +48,23 @@ test('saved prompts are private to the signed-in user', async () => {
   assert.match(migration, /owner_id = auth\.uid\(\)/);
 });
 
+test('duplicate signups prompt the person to sign in', async () => {
+  const app = await readFile('src.tsx', 'utf8');
+  assert.match(app, /mode === "signup" && !result\.data\.user\?\.identities\?\.length/);
+  assert.match(app, /An account already exists for this email\. Sign in instead\./);
+});
+
 test('edge function accepts browser CORS preflights', async () => {
   const worker = await readFile('supabase/functions/process-lecture/index.ts', 'utf8');
   assert.match(worker, /Access-Control-Allow-Origin/);
   assert.match(worker, /request\.method === 'OPTIONS'/);
+});
+
+test('slide files use an Edge-compatible base64 encoder', async () => {
+  const worker = await readFile('supabase/functions/process-lecture/index.ts', 'utf8');
+  assert.match(worker, /const base64 = \(bytes: Uint8Array\)/);
+  assert.match(worker, /file_data: base64\(new Uint8Array\(await file\.arrayBuffer\(\)\)\)/);
+  assert.doesNotMatch(worker, /\.toBase64\(\)/);
 });
 
 test('saved sessions can be deleted with their uploaded source files', async () => {

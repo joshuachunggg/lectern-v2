@@ -8,6 +8,10 @@ const notesCost = (usage: any) => { const cached = usage?.input_tokens_details?.
 const allowedAudio = new Set(['mp3', 'm4a', 'wav', 'webm', 'ogg', 'aac', 'flac']);
 const allowedMaterial = new Set(['pdf', 'pptx', 'txt']);
 const extension = (name: string) => name.toLowerCase().split('.').pop() ?? '';
+const base64 = (bytes: Uint8Array) => {
+  let binary = ''; for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+};
 const transcriptionProvider = Deno.env.get('TRANSCRIPTION_PROVIDER') === 'groq' ? 'groq' : 'openai';
 const transcribe = async (file: Blob, filename: string) => {
   const form = new FormData(); form.append('file', file, filename);
@@ -49,7 +53,7 @@ Deno.serve(async request => {
       if (synthesize_only && source.source_type === 'audio') continue;
       const { data: file, error } = await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file) throw error ?? new Error(`Could not download ${source.filename}.`);
       if (source.source_type === 'audio') { const result = await transcribe(file, source.filename); transcripts.push(result.text); transcriptionUsage.push(result.usage); estimatedCost += result.cost; }
-      else if (lecture.slide_mode === 'original' || !source.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: new Uint8Array(await file.arrayBuffer()).toBase64(), filename: source.filename });
+      else if (lecture.slide_mode === 'original' || !source.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: base64(new Uint8Array(await file.arrayBuffer())), filename: source.filename });
       else { const text = await file.text(); if (text.length > 100_000) throw new Error('Text materials must be 100,000 characters or fewer.'); materials.push(`## ${source.filename}\n${text}`); }
     }
     const transcript = synthesize_only ? lecture.transcript ?? '' : transcripts.join('\n\n'), context = materials.join('\n\n') || '[No text materials were supplied.]';
