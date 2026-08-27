@@ -63,7 +63,7 @@ test('edge function accepts browser CORS preflights', async () => {
 test('slide files use an Edge-compatible base64 encoder', async () => {
   const worker = await readFile('supabase/functions/process-lecture/index.ts', 'utf8');
   assert.match(worker, /const base64 = \(bytes: Uint8Array\)/);
-  assert.match(worker, /file_data: base64\(new Uint8Array\(await file\.arrayBuffer\(\)\)\)/);
+  assert.match(worker, /file_data: `data:\$\{source\.content_type\};base64,\$\{base64\(new Uint8Array\(await file\.arrayBuffer\(\)\)\)\}`/);
   assert.doesNotMatch(worker, /\.toBase64\(\)/);
 });
 

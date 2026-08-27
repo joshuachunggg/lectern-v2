@@ -58,7 +58,7 @@ Deno.serve(async request => {
         const { error: sourceError } = await admin.from('lecture_sources').update({ transcript: result.text }).eq('id', source.id); if (sourceError) throw sourceError;
         const { error: lectureError } = await admin.from('lectures').update({ transcript: transcripts.join('\n\n'), api_usage: { ...lecture.api_usage, transcription: transcriptionUsage }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id); if (lectureError) throw lectureError;
       }
-      else if (lecture.slide_mode === 'original' || !source.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: base64(new Uint8Array(await file.arrayBuffer())), filename: source.filename });
+      else if (lecture.slide_mode === 'original' || !source.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: `data:${source.content_type};base64,${base64(new Uint8Array(await file.arrayBuffer()))}`, filename: source.filename });
       else { const text = await file.text(); if (text.length > 100_000) throw new Error('Text materials must be 100,000 characters or fewer.'); materials.push(`## ${source.filename}\n${text}`); }
     }
     const transcript = synthesize_only ? lecture.transcript ?? '' : transcripts.join('\n\n'), context = materials.join('\n\n') || '[No text materials were supplied.]';
