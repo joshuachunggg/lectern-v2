@@ -7,6 +7,12 @@ const stripe = async (path: string, body: URLSearchParams) => {
   if (!response.ok) throw new Error(result.error?.message ?? 'Stripe request failed.');
   return result;
 };
+const stripeSubscription = async (id: string) => {
+  const response = await fetch(`https://api.stripe.com/v1/subscriptions/${id}`, { headers: { Authorization: `Bearer ${Deno.env.get('STRIPE_SECRET_KEY')}` } });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error?.message ?? 'Stripe request failed.');
+  return result;
+};
 
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -16,8 +22,15 @@ Deno.serve(async request => {
     const client = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: token } } });
     const { data: { user } } = await client.auth.getUser(); if (!user) throw new Error('Sign in required.');
     const { action, returnUrl: requestedReturnUrl } = await request.json();
-    const { data: account } = await admin.from('billing_accounts').select('*').eq('owner_id', user.id).maybeSingle();
-    if (action === 'status') return Response.json({ active: ['active', 'trialing'].includes(account?.subscription_status ?? ''), included_used: account?.included_used ?? 0, free_used: account?.free_used ?? false }, { headers: cors });
+    let { data: account } = await admin.from('billing_accounts').select('*').eq('owner_id', user.id).maybeSingle();
+    if (action === 'status') {
+      if (account?.stripe_subscription_id) {
+        const subscription = await stripeSubscription(account.stripe_subscription_id), end = subscription.current_period_end ?? subscription.items?.data?.[0]?.current_period_end;
+        account = { ...account, subscription_status: subscription.status, period_end: end ? new Date(end * 1000).toISOString() : null };
+        await admin.from('billing_accounts').update({ subscription_status: account.subscription_status, period_end: account.period_end, updated_at: new Date().toISOString() }).eq('owner_id', user.id);
+      }
+      return Response.json({ active: ['active', 'trialing'].includes(account?.subscription_status ?? ''), included_used: account?.included_used ?? 0, overage_used: account?.overage_used ?? 0, free_used: account?.free_used ?? false }, { headers: cors });
+    }
     let customer = account?.stripe_customer_id;
     if (!customer) {
       const created = await stripe('/customers', new URLSearchParams({ email: user.email ?? '', 'metadata[supabase_user_id]': user.id }));

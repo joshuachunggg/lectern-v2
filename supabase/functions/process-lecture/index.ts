@@ -13,15 +13,17 @@ const base64 = (bytes: Uint8Array) => {
   return btoa(binary);
 };
 const transcriptionProvider = Deno.env.get('TRANSCRIPTION_PROVIDER') === 'groq' ? 'groq' : 'openai';
-const transcribe = async (file: Blob, filename: string) => {
-  const form = new FormData(); form.append('file', file, filename);
+const transcribe = async (file: Blob | null, filename: string, audioUrl?: string) => {
+  const form = new FormData();
   if (transcriptionProvider === 'groq') {
-    form.append('model', 'whisper-large-v3'); form.append('response_format', 'verbose_json');
+    form.append('model', 'whisper-large-v3'); form.append('response_format', 'verbose_json'); if (audioUrl) form.append('url', audioUrl); else if (file) form.append('file', file, filename);
     const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('GROQ_API_KEY')}` }, body: form });
     if (!response.ok) throw new Error(`Groq transcription failed: ${await response.text()}`);
     const result = await response.json(), seconds = Number(result.duration ?? result.segments?.at(-1)?.end ?? 0);
     return { text: result.text, usage: { provider: 'groq', seconds }, cost: seconds * .111 / 3600 };
   }
+  if (!file) throw new Error('Could not download audio.');
+  form.append('file', file, filename);
   form.append('model', 'gpt-transcribe');
   const response = await openai('/audio/transcriptions', { method: 'POST', body: form });
   if (!response.ok) throw new Error(`Transcription failed: ${await response.text()}`);
@@ -52,14 +54,18 @@ Deno.serve(async request => {
     for (const source of sources ?? []) {
       if (synthesize_only && source.source_type === 'audio') continue;
       if (source.source_type === 'audio' && source.transcript) { transcripts.push(source.transcript); continue; }
-      const { data: file, error } = await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file) throw error ?? new Error(`Could not download ${source.filename}.`);
       if (source.source_type === 'audio') {
-        const result = await transcribe(file, source.filename); transcripts.push(result.text); transcriptionUsage.push(result.usage); estimatedCost += result.cost;
+        const { data: audioUrl } = transcriptionProvider === 'groq' ? await admin.storage.from('lecture-files').createSignedUrl(source.storage_path, 3600) : { data: null };
+        const { data: file, error } = audioUrl ? { data: null, error: null } : await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file && !audioUrl) throw error ?? new Error(`Could not download ${source.filename}.`);
+        const result = await transcribe(file, source.filename, audioUrl?.signedUrl); transcripts.push(result.text); transcriptionUsage.push(result.usage); estimatedCost += result.cost;
         const { error: sourceError } = await admin.from('lecture_sources').update({ transcript: result.text }).eq('id', source.id); if (sourceError) throw sourceError;
         const { error: lectureError } = await admin.from('lectures').update({ transcript: transcripts.join('\n\n'), api_usage: { ...lecture.api_usage, transcription: transcriptionUsage }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id); if (lectureError) throw lectureError;
       }
-      else if (lecture.slide_mode === 'original' || !source.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: `data:${source.content_type};base64,${base64(new Uint8Array(await file.arrayBuffer()))}`, filename: source.filename });
-      else { const text = await file.text(); if (text.length > 100_000) throw new Error('Text materials must be 100,000 characters or fewer.'); materials.push(`## ${source.filename}\n${text}`); }
+      else {
+        const { data: file, error } = await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file) throw error ?? new Error(`Could not download ${source.filename}.`);
+        if (lecture.slide_mode === 'original' || !source.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: `data:${source.content_type};base64,${base64(new Uint8Array(await file.arrayBuffer()))}`, filename: source.filename });
+        else { const text = await file.text(); if (text.length > 100_000) throw new Error('Text materials must be 100,000 characters or fewer.'); materials.push(`## ${source.filename}\n${text}`); }
+      }
     }
     const transcript = synthesize_only ? lecture.transcript ?? '' : transcripts.join('\n\n'), context = materials.join('\n\n') || '[No text materials were supplied.]';
     if (synthesize_only && !transcript) throw new Error('No saved transcript is available for this session.');

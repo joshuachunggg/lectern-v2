@@ -16,6 +16,8 @@ test('cloud worker uses OpenAI APIs and no local database', async () => {
   assert.match(worker, /Note synthesis returned no text/);
   assert.match(worker, /TRANSCRIPTION_PROVIDER/);
   assert.match(worker, /whisper-large-v3/);
+  assert.match(worker, /createSignedUrl\(source\.storage_path, 3600\)/);
+  assert.match(worker, /form\.append\('url', audioUrl\)/);
   assert.match(worker, /not a table of contents; never put links in the outline or headings/);
   assert.match(worker, /indent nested items with four spaces/);
   assert.doesNotMatch(worker, /sqlite|codex exec/i);
@@ -102,12 +104,15 @@ test('billing and source limits are enforced before model work starts', async ()
   const countedFreeLecture = await readFile('supabase/migrations/20260826000018_count_failed_free_lectures.sql', 'utf8');
   const parameterizedFreeLecture = await readFile('supabase/migrations/20260826000019_parameterized_free_lecture_count.sql', 'utf8');
   const claimReturn = await readFile('supabase/migrations/20260827000000_return_after_claim.sql', 'utf8');
+  const overages = await readFile('supabase/migrations/20260827000002_track_monthly_overages.sql', 'utf8');
   assert.match(worker, /claim_lecture_for_owner_v2/);
   assert.match(app, /submitting\.current/);
   assert.match(worker, /billing\/meter_events/);
   assert.match(billing, /mode: 'subscription'/);
+  assert.match(billing, /overage_used/);
+  assert.match(billing, /stripeSubscription\(account\.stripe_subscription_id\)/);
   assert.match(billing, /returnUrl\.origin !== origin/);
-  assert.match(app, /returnUrl: `\$\{window\.location\.origin\}\$\{window\.location\.pathname\}`/);
+  assert.match(app, /returnUrl: `\$\{window\.location\.origin\}\$\{window\.location\.pathname\}#manage-plan`/);
   assert.match(migration, /file_size_limit = 26214400/);
   assert.match(migration, /char_length\(synthesis_prompt\) <= 1500/);
   assert.match(materialLimit, /material_bytes > 5242880/);
@@ -118,6 +123,9 @@ test('billing and source limits are enforced before model work starts', async ()
   assert.match(countedFreeLecture, /count\(\*\).*billing_kind = 'free' and status <> 'error'/);
   assert.match(parameterizedFreeLecture, /execute 'select count\(\*\).*owner_id = \$1/);
   assert.match(claimReturn, /return query select 'free'::text, null::text; return;/);
+  assert.match(overages, /add column overage_used integer/);
+  assert.match(overages, /set overage_used = overage_used \+ 1/);
+  assert.match(overages, /ends_at > now\(\)/);
   assert.doesNotMatch(worker, /materialObjects/);
 });
 
@@ -127,9 +135,14 @@ test('billing handles cancellations and failed invoices, and the UI separates sa
   assert.match(webhook, /customer\.subscription\./);
   assert.match(webhook, /invoice\.payment_failed/);
   assert.match(webhook, /subscription_status: 'past_due'/);
+  assert.match(webhook, /api\.stripe\.com\/v1\/subscriptions/);
+  assert.match(webhook, /items\?\.data\?\.\[0\]\?\.current_period_end/);
   assert.match(app, /#saved-sessions/);
   assert.match(app, /<details className="profile">/);
-  assert.match(app, /lectures remaining this month/);
+  assert.match(app, /included lectures remaining this month/);
+  assert.match(app, /overage lectures used/);
+  assert.match(app, /Manage billing in Stripe/);
+  assert.match(webhook, /overage_used: 0/);
 });
 
 test('browser recordings are compact and capped at a lecture length', async () => {

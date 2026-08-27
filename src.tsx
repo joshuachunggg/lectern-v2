@@ -40,7 +40,7 @@ type Lecture = {
   synthesis_prompt: string;
 };
 type SavedPrompt = { id: string; name: string; prompt: string };
-type Billing = { active: boolean; included_used: number; free_used: boolean };
+type Billing = { active: boolean; included_used: number; overage_used: number; free_used: boolean };
 
 function App() {
   const recorder = useRef<MediaRecorder | null>(null),
@@ -53,7 +53,7 @@ function App() {
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [authError, setAuthError] = useState(""),
-    [page, setPage] = useState(() => window.location.hash === "#saved-sessions" ? "saved" : "new"),
+    [page, setPage] = useState(() => window.location.hash === "#saved-sessions" ? "saved" : window.location.hash === "#manage-plan" ? "plan" : "new"),
     [billing, setBilling] = useState<Billing | null>(null),
     [lectures, setLectures] = useState<Lecture[]>([]),
     [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]),
@@ -119,7 +119,7 @@ function App() {
     };
   }, []);
   useEffect(() => {
-    const updatePage = () => setPage(window.location.hash === "#saved-sessions" ? "saved" : "new");
+    const updatePage = () => setPage(window.location.hash === "#saved-sessions" ? "saved" : window.location.hash === "#manage-plan" ? "plan" : "new");
     window.addEventListener("hashchange", updatePage);
     return () => window.removeEventListener("hashchange", updatePage);
   }, []);
@@ -143,9 +143,9 @@ function App() {
     if (mode === "signup")
       setAuthError("Check your email to confirm your account.");
   }
-  async function manageBilling() {
+  async function openStripeBilling() {
     const action = billing?.active ? "portal" : "checkout";
-    const { data, error } = await supabase.functions.invoke("billing", { body: { action, returnUrl: `${window.location.origin}${window.location.pathname}` } });
+    const { data, error } = await supabase.functions.invoke("billing", { body: { action, returnUrl: `${window.location.origin}${window.location.pathname}#manage-plan` } });
     if (error || !data?.url) return setStatus(error?.message ?? "Could not open billing.");
     window.location.assign(data.url);
   }
@@ -487,12 +487,24 @@ function App() {
         <details className="profile">
           <summary><span>{user}</span><small>{billing?.active ? "Paid plan" : "Free plan"}</small></summary>
           <div>
-            <p>{billing?.active ? `${Math.max(0, 24 - billing.included_used)} lectures remaining this month` : `${billing?.free_used ? 0 : 1} free lecture remaining`}</p>
-            <button className="sign-out" onClick={manageBilling}>Manage plan</button>
+            <p>{billing?.active ? billing.overage_used ? `${billing.overage_used} overage lectures used` : `${Math.max(0, 24 - billing.included_used)} included lectures remaining this month` : `${billing?.free_used ? 0 : 1} free lecture remaining`}</p>
+            <a className="sign-out" href="#manage-plan">Manage plan</a>
             <button className="sign-out" onClick={() => supabase.auth.signOut()}>Sign out</button>
           </div>
         </details>
       </header>
+      {page === "plan" && <section className="plan" id="manage-plan">
+        <p className="eyebrow">Manage plan</p>
+        <h1>{billing?.active ? "Lectern plan" : "Free plan"}</h1>
+        {billing?.active ? <>
+          <p>Includes 24 lectures each month, then $0.50 per lecture.</p>
+          <dl><div><dt>Included lectures remaining</dt><dd>{Math.max(0, 24 - billing.included_used)}</dd></div><div><dt>Overage lectures used</dt><dd>{billing.overage_used}</dd></div><div><dt>Overage cost this month</dt><dd>${(billing.overage_used * 0.5).toFixed(2)}</dd></div></dl>
+          <button onClick={openStripeBilling}>Manage billing in Stripe</button>
+        </> : <>
+          <p>Your first lecture is free. The Lectern plan is $10/month and includes 24 lectures, then $0.50 per lecture.</p>
+          <button onClick={openStripeBilling}>Subscribe in Stripe</button>
+        </>}
+      </section>}
       {page === "new" && <>
       <section className="intro" id="new-session">
         <p className="eyebrow">New session</p>
