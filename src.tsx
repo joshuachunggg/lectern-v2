@@ -708,7 +708,11 @@ function App() {
                   >
                     Add additional content
                   </button>
-                  <button onClick={() => openPrompt(session)}>Redo notes</button>
+                  {session.status === "error" ? (
+                    <button disabled={processing} onClick={() => processLecture(session.id, "Retrying processing…").catch(() => {})}>Retry processing</button>
+                  ) : (
+                    <button onClick={() => openPrompt(session)}>Redo notes</button>
+                  )}
                 </div>
               </article>
             ))}

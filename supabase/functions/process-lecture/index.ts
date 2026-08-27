@@ -48,11 +48,16 @@ Deno.serve(async request => {
       }
     }
     if (!synthesize_only) await admin.from('lectures').update({ status: 'transcribing', status_message: 'Transcribing lecture…' }).eq('id', lecture_id);
-    const transcripts: string[] = [], materials: string[] = [], files: { type: 'input_file'; file_data: string; filename: string }[] = [], transcriptionUsage: unknown[] = synthesize_only ? lecture.api_usage?.transcription ?? [] : []; let estimatedCost = synthesize_only ? Number(lecture.estimated_cost_usd ?? 0) : 0;
+    const transcripts: string[] = [], materials: string[] = [], files: { type: 'input_file'; file_data: string; filename: string }[] = [], transcriptionUsage: unknown[] = lecture.api_usage?.transcription ?? []; let estimatedCost = Number(lecture.estimated_cost_usd ?? 0);
     for (const source of sources ?? []) {
       if (synthesize_only && source.source_type === 'audio') continue;
+      if (source.source_type === 'audio' && source.transcript) { transcripts.push(source.transcript); continue; }
       const { data: file, error } = await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file) throw error ?? new Error(`Could not download ${source.filename}.`);
-      if (source.source_type === 'audio') { const result = await transcribe(file, source.filename); transcripts.push(result.text); transcriptionUsage.push(result.usage); estimatedCost += result.cost; }
+      if (source.source_type === 'audio') {
+        const result = await transcribe(file, source.filename); transcripts.push(result.text); transcriptionUsage.push(result.usage); estimatedCost += result.cost;
+        const { error: sourceError } = await admin.from('lecture_sources').update({ transcript: result.text }).eq('id', source.id); if (sourceError) throw sourceError;
+        const { error: lectureError } = await admin.from('lectures').update({ transcript: transcripts.join('\n\n'), api_usage: { ...lecture.api_usage, transcription: transcriptionUsage }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id); if (lectureError) throw lectureError;
+      }
       else if (lecture.slide_mode === 'original' || !source.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: base64(new Uint8Array(await file.arrayBuffer())), filename: source.filename });
       else { const text = await file.text(); if (text.length > 100_000) throw new Error('Text materials must be 100,000 characters or fewer.'); materials.push(`## ${source.filename}\n${text}`); }
     }

@@ -67,6 +67,16 @@ test('slide files use an Edge-compatible base64 encoder', async () => {
   assert.doesNotMatch(worker, /\.toBase64\(\)/);
 });
 
+test('processing resumes from completed source transcriptions', async () => {
+  const worker = await readFile('supabase/functions/process-lecture/index.ts', 'utf8');
+  const migration = await readFile('supabase/migrations/20260827000001_persist_source_transcripts.sql', 'utf8');
+  const app = await readFile('src.tsx', 'utf8');
+  assert.match(migration, /add column transcript text/);
+  assert.match(worker, /source\.source_type === 'audio' && source\.transcript/);
+  assert.match(worker, /from\('lecture_sources'\)\.update\(\{ transcript: result\.text \}\)/);
+  assert.match(app, /Retry processing/);
+});
+
 test('saved sessions can be deleted with their uploaded source files', async () => {
   const app = await readFile('src.tsx', 'utf8');
   assert.match(app, /async function deleteLecture/);
