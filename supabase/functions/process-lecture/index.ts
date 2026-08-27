@@ -47,7 +47,7 @@ Deno.serve(async request => {
       if (claim.kind === 'overage' && !lecture.metered_at) {
         const response = await fetch('https://api.stripe.com/v1/billing/meter_events', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('STRIPE_SECRET_KEY')}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ event_name: 'lectern_lecture', 'payload[stripe_customer_id]': claim.stripe_customer_id, 'payload[value]': '1', identifier: lecture_id }) });
         const meterError = response.ok ? '' : await response.text();
-        if (!response.ok && !/duplicate.*identifier|identifier.*already exists/i.test(meterError)) throw new Error(`Could not record the $0.50 overage: ${meterError}`);
+        if (!response.ok && !/duplicate.*identifier|identifier.*already exists|already exists.*identifier/i.test(meterError)) throw new Error(`Could not record the $0.50 overage: ${meterError}`);
         await admin.from('lectures').update({ metered_at: new Date().toISOString() }).eq('id', lecture_id);
       }
     }

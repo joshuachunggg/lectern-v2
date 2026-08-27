@@ -109,7 +109,7 @@ test('billing and source limits are enforced before model work starts', async ()
   assert.match(app, /submitting\.current/);
   assert.match(worker, /billing\/meter_events/);
   assert.match(worker, /metered_at/);
-  assert.match(worker, /duplicate\.\*identifier/);
+  assert.match(worker, /already exists\.\*identifier/);
   assert.match(billing, /mode: 'subscription'/);
   assert.match(billing, /overage_used/);
   assert.match(billing, /stripeSubscription\(account\.stripe_subscription_id\)/);
