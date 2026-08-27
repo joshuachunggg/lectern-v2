@@ -16,6 +16,7 @@ const MAX_PROMPT_CHARS = 1500;
 const MAX_COURSE_MATERIAL_BYTES = 5 * 1024 * 1024;
 const materialSize = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 const MAX_AUDIO_SECONDS = 90 * 60;
+const MAX_TRANSCRIPTION_FILE_BYTES = 24 * 1024 * 1024;
 const AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "wav", "webm", "ogg", "aac", "flac"]);
 const audioDuration = (file: File) => new Promise<number>((resolve, reject) => {
   const audio = document.createElement("audio"), url = URL.createObjectURL(file);
@@ -23,6 +24,22 @@ const audioDuration = (file: File) => new Promise<number>((resolve, reject) => {
   audio.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`Could not read ${file.name}.`)); };
   audio.src = url;
 });
+const isAudio = (file: File) => AUDIO_EXTENSIONS.has(file.name.toLowerCase().split(".").pop() ?? "");
+const wav = (samples: Float32Array, start: number, end: number) => {
+  const bytes = new ArrayBuffer(44 + (end - start) * 2), view = new DataView(bytes);
+  view.setUint32(0, 0x46464952, false); view.setUint32(4, bytes.byteLength - 8, true); view.setUint32(8, 0x45564157, false); view.setUint32(12, 0x20746d66, false); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, 16000, true); view.setUint32(28, 32000, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); view.setUint32(36, 0x61746164, false); view.setUint32(40, (end - start) * 2, true);
+  for (let index = start; index < end; index += 1) view.setInt16(44 + (index - start) * 2, Math.max(-1, Math.min(1, samples[index])) * 0x7fff, true);
+  return new Blob([bytes], { type: "audio/wav" });
+};
+const chunkAudio = async (file: File) => {
+  if (file.size <= MAX_TRANSCRIPTION_FILE_BYTES) return [file];
+  // ponytail: browser decode uses memory; add server-side transcoding only if 90-minute uploads exceed browser capacity.
+  const context = new AudioContext({ sampleRate: 16000 });
+  try {
+    const audio = await context.decodeAudioData(await file.arrayBuffer()), samples = audio.getChannelData(0), chunkSamples = Math.floor((MAX_TRANSCRIPTION_FILE_BYTES - 44) / 2), name = file.name.replace(/\.[^.]+$/, "");
+    return Array.from({ length: Math.ceil(samples.length / chunkSamples) }, (_, index) => new File([wav(samples, index * chunkSamples, Math.min(samples.length, (index + 1) * chunkSamples))], `${name}-${String(index + 1).padStart(2, "0")}.wav`, { type: "audio/wav" }));
+  } finally { await context.close(); }
+};
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)
     .toString()
@@ -166,6 +183,22 @@ function App() {
     });
     if (error) throw error;
   }
+  async function chunkStoredAudio(id: string) {
+    const { data: sources, error } = await supabase.from("lecture_sources").select("id,storage_path,filename,content_type,source_type").eq("lecture_id", id);
+    if (error) throw error;
+    for (const source of sources ?? []) {
+      if (source.source_type !== "audio") continue;
+      const { data: blob, error: downloadError } = await supabase.storage.from("lecture-files").download(source.storage_path);
+      if (downloadError || !blob) throw downloadError ?? new Error(`Could not download ${source.filename}.`);
+      if (blob.size <= MAX_TRANSCRIPTION_FILE_BYTES) continue;
+      setStatus(`Splitting ${source.filename} for transcription…`);
+      const chunks = await chunkAudio(new File([blob], source.filename, { type: source.content_type }));
+      if ((sources?.length ?? 0) - 1 + chunks.length > 12) throw new Error("This lecture becomes more than 12 audio chunks. Split it into fewer recordings.");
+      for (const chunk of chunks) await upload(id, chunk);
+      const { error: deleteError } = await supabase.from("lecture_sources").delete().eq("id", source.id); if (deleteError) throw deleteError;
+      await supabase.storage.from("lecture-files").remove([source.storage_path]);
+    }
+  }
   async function processLecture(
     id: string,
     message: string,
@@ -174,15 +207,17 @@ function App() {
     setProcessing(true);
     setNotes("");
     setStatus(message);
-    const poll = window.setInterval(async () => {
-      const { data } = await supabase
-        .from("lectures")
-        .select("status_message")
-        .eq("id", id)
-        .single();
-      if (data) setStatus(data.status_message);
-    }, 1500);
+    let poll: ReturnType<typeof window.setInterval> | undefined;
     try {
+      await chunkStoredAudio(id);
+      poll = window.setInterval(async () => {
+        const { data } = await supabase
+          .from("lectures")
+          .select("status_message")
+          .eq("id", id)
+          .single();
+        if (data) setStatus(data.status_message);
+      }, 1500);
       const { error } = await supabase.functions.invoke("process-lecture", {
         body: { lecture_id: id, synthesize_only: synthesizeOnly },
       });
@@ -208,7 +243,7 @@ function App() {
       );
       throw error;
     } finally {
-      clearInterval(poll);
+      if (poll) clearInterval(poll);
       setProcessing(false);
     }
   }
@@ -290,7 +325,7 @@ function App() {
     if (!sources.length) return;
     if (files.reduce((total, file) => total + file.size, 0) > MAX_COURSE_MATERIAL_BYTES)
       return setStatus("Course materials can total at most 5 MB.");
-    if ((await Promise.all(sources.filter(file => AUDIO_EXTENSIONS.has(file.name.toLowerCase().split(".").pop() ?? "")).map(audioDuration))).reduce((total, seconds) => total + seconds, 0) > MAX_AUDIO_SECONDS)
+    if ((await Promise.all(sources.filter(isAudio).map(audioDuration))).reduce((total, seconds) => total + seconds, 0) > MAX_AUDIO_SECONDS)
       return setStatus("A lecture can contain at most 90 minutes of audio.");
     if (notePrompt.length > MAX_PROMPT_CHARS)
       return setStatus("Custom note preferences are limited to 1,500 characters.");
@@ -298,8 +333,11 @@ function App() {
     submitting.current = true;
     setProcessing(true);
     setNotes("");
-    setStatus("Creating lecture session…");
+    setStatus("Preparing audio…");
     try {
+      const uploadSources = (await Promise.all(sources.map(file => isAudio(file) ? chunkAudio(file) : [file]))).flat();
+      if (uploadSources.length > 12) throw new Error("This lecture becomes more than 12 audio chunks. Split it into fewer recordings.");
+      setStatus("Creating lecture session…");
       const { data: created, error } = await supabase
         .from("lectures")
         .insert({
@@ -311,9 +349,9 @@ function App() {
         .single();
       if (error || !created)
         throw error ?? new Error("Could not create the lecture session.");
-      for (const [index, file] of sources.entries()) {
+      for (const [index, file] of uploadSources.entries()) {
         setStatus(
-          `Uploading source ${index + 1} of ${sources.length}: ${file.name}`,
+          `Uploading source ${index + 1} of ${uploadSources.length}: ${file.name}`,
         );
         await upload(created.id, file);
       }
@@ -347,11 +385,14 @@ function App() {
       );
     if (!added.length) return;
     try {
-      if ((await Promise.all(added.filter(file => AUDIO_EXTENSIONS.has(file.name.toLowerCase().split(".").pop() ?? "")).map(audioDuration))).reduce((total, seconds) => total + seconds, 0) > MAX_AUDIO_SECONDS)
+      if ((await Promise.all(added.filter(isAudio).map(audioDuration))).reduce((total, seconds) => total + seconds, 0) > MAX_AUDIO_SECONDS)
         return setStatus("Added audio can contain at most 90 minutes.");
       setProcessing(true);
+      setStatus("Preparing audio…");
+      const uploadSources = (await Promise.all(added.map(file => isAudio(file) ? chunkAudio(file) : [file]))).flat();
+      if (uploadSources.length > 12) throw new Error("This lecture becomes more than 12 audio chunks. Split it into fewer recordings.");
       setStatus(`Uploading sources for ${contentSession.title}…`);
-      for (const file of added) await upload(contentSession.id, file);
+      for (const file of uploadSources) await upload(contentSession.id, file);
       contentDialog.current?.close();
       form.reset();
       await processLecture(contentSession.id, "Sources added — rebuilding notes…");

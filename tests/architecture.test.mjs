@@ -150,6 +150,10 @@ test('billing handles cancellations and failed invoices, and the UI separates sa
 test('browser recordings are compact and capped at a lecture length', async () => {
   const app = await readFile('src.tsx', 'utf8');
   assert.match(app, /MAX_AUDIO_SECONDS = 90 \* 60/);
+  assert.match(app, /MAX_TRANSCRIPTION_FILE_BYTES = 24 \* 1024 \* 1024/);
+  assert.match(app, /new AudioContext\(\{ sampleRate: 16000 \}\)/);
+  assert.match(app, /chunkAudio\(file\)/);
+  assert.match(app, /async function chunkStoredAudio/);
   assert.match(app, /audioBitsPerSecond: 32000/);
   assert.match(app, /channelCount: 1/);
   assert.match(app, /at most 90 minutes of audio/);
