@@ -70,6 +70,7 @@ test('billing and source limits are enforced before model work starts', async ()
   const materialLimit = await readFile('supabase/migrations/20260826000004_replace_byte_limit_with_audio_limit.sql', 'utf8');
   const activeSubscription = await readFile('supabase/migrations/20260826000005_allow_active_subscriptions.sql', 'utf8');
   const failedFreeLecture = await readFile('supabase/migrations/20260826000006_restore_failed_free_lectures.sql', 'utf8');
+  const firstFreeLecture = await readFile('supabase/migrations/20260826000007_claim_first_free_lecture.sql', 'utf8');
   assert.match(worker, /claim_lecture/);
   assert.match(app, /submitting\.current/);
   assert.match(worker, /billing\/meter_events/);
@@ -81,6 +82,7 @@ test('billing and source limits are enforced before model work starts', async ()
   assert.match(materialLimit, /material_bytes > 5242880/);
   assert.match(activeSubscription, /subscription_status in \('active', 'trialing'\) then/);
   assert.match(failedFreeLecture, /status <> 'error'/);
+  assert.match(firstFreeLecture, /coalesce\(account\.free_used, false\) = false/);
   assert.doesNotMatch(worker, /materialObjects/);
 });
 
