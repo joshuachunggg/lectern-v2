@@ -71,7 +71,11 @@ test('billing and source limits are enforced before model work starts', async ()
   const activeSubscription = await readFile('supabase/migrations/20260826000005_allow_active_subscriptions.sql', 'utf8');
   const failedFreeLecture = await readFile('supabase/migrations/20260826000006_restore_failed_free_lectures.sql', 'utf8');
   const firstFreeLecture = await readFile('supabase/migrations/20260826000007_claim_first_free_lecture.sql', 'utf8');
-  assert.match(worker, /claim_lecture/);
+  const retryFailedFreeLecture = await readFile('supabase/migrations/20260826000017_retry_failed_free_lectures.sql', 'utf8');
+  const countedFreeLecture = await readFile('supabase/migrations/20260826000018_count_failed_free_lectures.sql', 'utf8');
+  const parameterizedFreeLecture = await readFile('supabase/migrations/20260826000019_parameterized_free_lecture_count.sql', 'utf8');
+  const claimReturn = await readFile('supabase/migrations/20260827000000_return_after_claim.sql', 'utf8');
+  assert.match(worker, /claim_lecture_for_owner_v2/);
   assert.match(app, /submitting\.current/);
   assert.match(worker, /billing\/meter_events/);
   assert.match(billing, /mode: 'subscription'/);
@@ -83,6 +87,10 @@ test('billing and source limits are enforced before model work starts', async ()
   assert.match(activeSubscription, /subscription_status in \('active', 'trialing'\) then/);
   assert.match(failedFreeLecture, /status <> 'error'/);
   assert.match(firstFreeLecture, /coalesce\(account\.free_used, false\) = false/);
+  assert.match(retryFailedFreeLecture, /billing_kind = 'free' and status <> 'error'/);
+  assert.match(countedFreeLecture, /count\(\*\).*billing_kind = 'free' and status <> 'error'/);
+  assert.match(parameterizedFreeLecture, /execute 'select count\(\*\).*owner_id = \$1/);
+  assert.match(claimReturn, /return query select 'free'::text, null::text; return;/);
   assert.doesNotMatch(worker, /materialObjects/);
 });
 
