@@ -140,9 +140,12 @@ test('browser recordings are compact and capped at a lecture length', async () =
 
 test('course materials can be selected or dropped before processing', async () => {
   const app = await readFile('src.tsx', 'utf8');
+  const style = await readFile('style.css', 'utf8');
   assert.match(app, /function queueMaterials/);
   assert.match(app, /function removeMaterial/);
   assert.match(app, /onDrop=\{dropFiles\}/);
   assert.match(app, /Course materials can total at most 5 MB/);
   assert.match(app, /status === "Study notes are ready\."/);
+  assert.match(style, /\.queued-materials ul \{\n  max-height: 78px;/);
+  assert.doesNotMatch(style, /^ul \{/m);
 });

@@ -298,7 +298,7 @@ audio {
 .dropzone small {
   margin-top: 7px;
 }
-ul {
+.queued-materials ul {
   max-height: 78px;
   margin: 10px 0;
   overflow: auto;
