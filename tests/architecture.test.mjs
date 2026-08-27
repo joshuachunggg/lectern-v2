@@ -17,6 +17,7 @@ test('cloud worker uses OpenAI APIs and no local database', async () => {
   assert.match(worker, /TRANSCRIPTION_PROVIDER/);
   assert.match(worker, /whisper-large-v3/);
   assert.match(worker, /not a table of contents; never put links in the outline or headings/);
+  assert.match(worker, /indent nested items with four spaces/);
   assert.doesNotMatch(worker, /sqlite|codex exec/i);
 });
 
@@ -30,6 +31,7 @@ test('new lectures save optional note preferences', async () => {
   assert.match(app, /id="note-prompt"/);
   assert.match(app, /Redo AI synthesis/);
   assert.match(app, /remarkPlugins=\{\[remarkGfm\]\}/);
+  assert.match(app, /Math\.ceil\(indent\.length \/ 4\) \* 4/);
   assert.match(app, /synthesize_only: synthesizeOnly/);
   assert.match(app, /Add additional content/);
   assert.match(app, /function openPrompt\(session: Lecture \| null\)/);

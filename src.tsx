@@ -803,7 +803,7 @@ function App() {
               <button
                 onClick={() =>
                   navigator.clipboard
-                    .writeText(notes)
+                    .writeText(notes.replace(/^( +)([-*+]|\d+[.)]) /gm, (_, indent, marker) => `${" ".repeat(Math.ceil(indent.length / 4) * 4)}${marker} `).replace(/[ \t]+$/gm, ""))
                     .then(() => setStatus("Notes copied to clipboard."))
                 }
               >
