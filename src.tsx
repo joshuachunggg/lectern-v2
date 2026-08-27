@@ -430,9 +430,9 @@ function App() {
       ? 1
       : status.includes("Transcribing")
         ? 2
-        : status.includes("Writing")
+          : status.includes("Writing")
           ? 4
-          : status.includes("ready")
+          : status === "Study notes are ready."
             ? 5
             : 0;
 

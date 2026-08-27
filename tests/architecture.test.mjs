@@ -69,6 +69,7 @@ test('billing and source limits are enforced before model work starts', async ()
   const migration = await readFile('supabase/migrations/20260826000003_add_billing.sql', 'utf8');
   const materialLimit = await readFile('supabase/migrations/20260826000004_replace_byte_limit_with_audio_limit.sql', 'utf8');
   const activeSubscription = await readFile('supabase/migrations/20260826000005_allow_active_subscriptions.sql', 'utf8');
+  const failedFreeLecture = await readFile('supabase/migrations/20260826000006_restore_failed_free_lectures.sql', 'utf8');
   assert.match(worker, /claim_lecture/);
   assert.match(worker, /billing\/meter_events/);
   assert.match(billing, /mode: 'subscription'/);
@@ -78,6 +79,7 @@ test('billing and source limits are enforced before model work starts', async ()
   assert.match(migration, /char_length\(synthesis_prompt\) <= 1500/);
   assert.match(materialLimit, /material_bytes > 5242880/);
   assert.match(activeSubscription, /subscription_status in \('active', 'trialing'\) then/);
+  assert.match(failedFreeLecture, /status <> 'error'/);
   assert.doesNotMatch(worker, /materialObjects/);
 });
 
@@ -106,4 +108,5 @@ test('course materials can be selected or dropped before processing', async () =
   assert.match(app, /function removeMaterial/);
   assert.match(app, /onDrop=\{dropFiles\}/);
   assert.match(app, /Course materials can total at most 5 MB/);
+  assert.match(app, /status === "Study notes are ready\."/);
 });
