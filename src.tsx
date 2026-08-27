@@ -46,7 +46,8 @@ function App() {
     timer = useRef<ReturnType<typeof setInterval> | null>(null),
     notesDialog = useRef<HTMLDialogElement | null>(null),
     contentDialog = useRef<HTMLDialogElement | null>(null),
-    promptDialog = useRef<HTMLDialogElement | null>(null);
+    promptDialog = useRef<HTMLDialogElement | null>(null),
+    submitting = useRef(false);
   const [user, setUser] = useState<string | null>(null),
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
@@ -290,6 +291,8 @@ function App() {
       return setStatus("A lecture can contain at most 90 minutes of audio.");
     if (notePrompt.length > MAX_PROMPT_CHARS)
       return setStatus("Custom note preferences are limited to 1,500 characters.");
+    if (submitting.current) return;
+    submitting.current = true;
     setProcessing(true);
     setNotes("");
     setStatus("Creating lecture session…");
@@ -323,7 +326,7 @@ function App() {
           : "Could not create the lecture session.",
       );
       setProcessing(false);
-    }
+    } finally { submitting.current = false; }
   }
   async function addToLecture(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

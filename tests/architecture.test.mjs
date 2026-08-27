@@ -71,6 +71,7 @@ test('billing and source limits are enforced before model work starts', async ()
   const activeSubscription = await readFile('supabase/migrations/20260826000005_allow_active_subscriptions.sql', 'utf8');
   const failedFreeLecture = await readFile('supabase/migrations/20260826000006_restore_failed_free_lectures.sql', 'utf8');
   assert.match(worker, /claim_lecture/);
+  assert.match(app, /submitting\.current/);
   assert.match(worker, /billing\/meter_events/);
   assert.match(billing, /mode: 'subscription'/);
   assert.match(billing, /returnUrl\.origin !== origin/);
