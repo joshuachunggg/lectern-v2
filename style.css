@@ -139,9 +139,14 @@ small {
 .plan dl div { padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
 .plan dt { color: #526061; font-size: 12px; }
 .plan dd { margin: 5px 0 0; font-size: 21px; font-weight: bold; }
-.plan > button + button { margin-left: 8px; }
-.credit-amount { margin-right: 8px; font-size: 14px; font-weight: bold; }
-.credit-amount input { width: 90px; margin-left: 6px; padding: 10px; }
+.refill { display: flex; align-items: center; gap: 10px; margin-top: 20px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fffefa; }
+.refill > div { flex: 1; }
+.refill strong, .refill small { display: block; }
+.refill small { margin-top: 2px; }
+.credit-amount { display: flex; align-items: center; gap: 2px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: white; }
+.credit-amount input { width: 64px; padding: 10px 0; border: 0; background: transparent; font: inherit; }
+.refill button { white-space: nowrap; }
+.manage-subscription { margin-top: 10px; border: 1px solid var(--line); background: transparent; color: var(--ink); }
 .eyebrow,
 .card-heading p {
   color: var(--orange);

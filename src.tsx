@@ -555,7 +555,12 @@ function App() {
         {billing?.active ? <>
           <p>Includes 24 lectures each month. Overage lectures are $0.50 and use your non-expiring balance.</p>
           <dl><div><dt>Included lectures remaining</dt><dd>{Math.max(0, 24 - billing.included_used)}</dd></div><div><dt>Overage balance</dt><dd>${(billing.credit_cents / 100).toFixed(2)}</dd></div></dl>
-          <label className="credit-amount">Add funds <input type="number" min="0.50" max="100" step="0.01" inputMode="decimal" value={creditAmount} onChange={event => setCreditAmount(event.target.value)} /></label><button onClick={addOverageFunds}>Add overage funds</button><button onClick={openStripeBilling}>Manage subscription in Stripe</button>
+          <div className="refill">
+            <div><strong>Add overage funds</strong><small>Any amount from $0.50 to $100.</small></div>
+            <label className="credit-amount"><span>$</span><input aria-label="Overage fund amount" type="number" min="0.50" max="100" step="0.01" inputMode="decimal" value={creditAmount} onChange={event => setCreditAmount(event.target.value)} /></label>
+            <button onClick={addOverageFunds}>Add funds</button>
+          </div>
+          <button className="manage-subscription" onClick={openStripeBilling}>Manage subscription in Stripe</button>
         </> : <>
           <p>Your first lecture is free. The Lectern plan is $10/month and includes 24 lectures. Overage lectures cost $0.50 from a prepaid balance.</p>
           <button onClick={openStripeBilling}>Subscribe in Stripe</button>
