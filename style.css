@@ -39,7 +39,7 @@ a {
 button,
 input,
 textarea {
-  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease, transform 150ms ease;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease, color 180ms ease, transform 180ms ease;
 }
 button:focus-visible,
 input:focus-visible,
@@ -63,8 +63,9 @@ header nav a {
   padding: 9px 13px;
   border: 1px solid transparent;
   border-radius: 999px;
-  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+  transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
 }
+header nav a:hover { transform: translateY(-1px); }
 header nav a:hover {
   border-color: var(--line);
   background: var(--card);
@@ -106,6 +107,7 @@ header nav a.active {
   background: var(--card);
   box-shadow: 0 8px 20px rgb(18 34 35 / 0.12);
 }
+.profile[open] > div { animation: reveal 180ms ease-out both; transform-origin: top right; }
 .profile p { margin: 0 0 12px; color: #526061; font-size: 13px; line-height: 1.4; }
 .profile .sign-out { display: block; margin-top: 9px; }
 .profile a.sign-out { color: var(--ink); font-size: 13px; }
@@ -127,6 +129,7 @@ small {
 .intro {
   padding: 76px 0 42px;
   max-width: 760px;
+  animation: rise 420ms 80ms both;
 }
 .plan {
   max-width: 620px;
@@ -189,7 +192,12 @@ small {
   background: var(--card);
   padding: 24px;
   box-shadow: 0 1px 2px rgb(18 34 35 / 0.04);
+  animation: rise 420ms both;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
+.card:hover { border-color: #c9c1b0; box-shadow: 0 10px 24px rgb(18 34 35 / 0.07); transform: translateY(-2px); }
+.workspace .card:nth-child(2) { animation-delay: 70ms; }
+.workspace .card:nth-child(3) { animation-delay: 140ms; }
 .card-heading {
   align-self: stretch;
   display: flex;
@@ -291,6 +299,7 @@ button:disabled {
 .file-queue > small { display: block; margin-top: 2px; }
 .file-queue ul { display: grid; gap: 7px; max-height: 136px; margin: 9px 0 0; padding: 0; overflow: auto; list-style: none; }
 .file-queue li { padding: 9px; border: 1px solid #ead8d0; border-radius: 10px; background: #fffaf7; }
+.file-queue li { animation: reveal 180ms ease-out both; }
 .file-icon { width: 30px; height: 30px; border-radius: 9px; font-size: 16px; }
 .file-details { display: grid; min-width: 0; flex: 1; gap: 2px; }
 .file-details strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
@@ -442,7 +451,10 @@ footer {
   border-radius: 8px;
   background: var(--card);
   box-shadow: 0 1px 2px rgb(18 34 35 / 0.04);
+  animation: rise 300ms both;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
+.saved-session:hover { border-color: #c9c1b0; box-shadow: 0 9px 20px rgb(18 34 35 / 0.07); transform: translateY(-2px); }
 .session-title {
   display: flex;
   min-height: 32px;
@@ -537,6 +549,8 @@ footer {
 .modal::backdrop {
   background: rgb(38 56 58 / 0.45);
 }
+.modal[open], .notes[open] { animation: dialog-in 220ms ease-out both; }
+.modal[open]::backdrop, .notes[open]::backdrop { animation: backdrop-in 180ms ease-out both; }
 .modal form,
 .modal > label {
   display: grid;
@@ -742,6 +756,25 @@ footer {
 }
 .progress li.complete::before {
   content: "✓ ";
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(-5px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(10px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 1ms !important; }
 }
 .auth {
   max-width: 520px;
