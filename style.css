@@ -789,6 +789,7 @@ footer {
 .sign-out {
   border: 0;
   background: none;
+  box-shadow: none;
   color: inherit;
   cursor: pointer;
   font: inherit;

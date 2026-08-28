@@ -537,7 +537,7 @@ function App() {
           <div>
             <p>{billing?.active ? `$${((billing.credit_cents ?? 0) / 100).toFixed(2)} overage balance` : `${billing?.free_used ? 0 : 1} free lecture remaining`}</p>
             {!billing?.active && <button className="upgrade-plan" onClick={() => pricingDialog.current?.showModal()}>Upgrade</button>}
-            <a className="sign-out" href="#manage-plan">Manage plan</a>
+            {billing?.active && <a className="sign-out" href="#manage-plan">Manage plan</a>}
             <button className="sign-out" onClick={() => supabase.auth.signOut()}>Sign out</button>
           </div>
         </details>

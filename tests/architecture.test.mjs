@@ -171,6 +171,7 @@ test('recorded and uploaded audio is capped at a lecture length and prepared for
 test('free users can compare plans and view finished transcripts', async () => {
   const app = await readFile('src.tsx', 'utf8');
   assert.match(app, /Upgrade to Lectern/);
+  assert.match(app, /billing\?\.active && <a className="sign-out" href="#manage-plan">Manage plan<\/a>/);
   assert.match(app, /24 lectures each month/);
   assert.match(app, /Show transcript/);
   assert.match(app, /Copy transcript/);
