@@ -87,6 +87,7 @@ function App() {
     [audioUrl, setAudioUrl] = useState(""),
     [audioFiles, setAudioFiles] = useState<File[]>([]),
     [files, setFiles] = useState<File[]>([]),
+    [draggingMaterials, setDraggingMaterials] = useState(false),
     [materials, setMaterials] = useState(""),
     [notePrompt, setNotePrompt] = useState(""),
     [promptName, setPromptName] = useState(""),
@@ -308,7 +309,11 @@ function App() {
   }
   function dropMaterials(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
+    setDraggingMaterials(false);
     queueMaterials(Array.from(event.dataTransfer.files));
+  }
+  function leaveMaterialDropzone(event: DragEvent<HTMLLabelElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node)) setDraggingMaterials(false);
   }
   function removeMaterial(index: number) {
     setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index));
@@ -622,7 +627,7 @@ function App() {
             <p>Course materials</p>
           </div>
           <div className="card-body">
-            <label className="material-dropzone" onDragOver={(event) => event.preventDefault()} onDrop={dropMaterials}>
+            <label className={`material-dropzone${draggingMaterials ? " is-dragging" : ""}`} onDragEnter={() => setDraggingMaterials(true)} onDragOver={(event) => event.preventDefault()} onDragLeave={leaveMaterialDropzone} onDrop={dropMaterials}>
               <input
                 type="file"
                 accept=".pdf,.txt"

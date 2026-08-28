@@ -193,6 +193,7 @@ test('course materials can be selected before processing', async () => {
   assert.match(app, /accept="\.pdf,\.txt"/);
   assert.match(app, /function dropMaterials/);
   assert.match(app, /onDrop=\{dropMaterials\}/);
+  assert.match(app, /is-dragging/);
   assert.match(app, /Course materials can total at most 5 MB/);
   assert.match(app, /status === "Study notes are ready\."/);
   assert.match(style, /\.file-queue ul \{ display: grid; gap: 7px; max-height: 136px;/);
