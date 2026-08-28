@@ -448,9 +448,10 @@ footer {
 }
 .session-title {
   display: flex;
+  min-height: 32px;
   align-items: center;
   gap: 4px;
-  padding-right: 28px;
+  padding-right: 40px;
 }
 .session-title strong {
   overflow: hidden;
@@ -468,15 +469,18 @@ footer {
 }
 .delete-session {
   position: absolute;
-  top: 12px;
+  top: 18px;
   right: 12px;
   display: grid;
-  width: 28px;
-  height: 28px;
-  padding: 6px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   place-items: center;
+  border: 0;
+  border-radius: 9px;
   color: #8a3434;
-  background: transparent;
+  background: #fff6f3;
+  box-shadow: none;
 }
 .delete-session:hover {
   background: #f8e8e8;
@@ -492,12 +496,15 @@ footer {
 }
 .edit-session {
   display: grid;
-  width: 25px;
-  height: 25px;
-  padding: 5px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   place-items: center;
+  border: 0;
+  border-radius: 9px;
   color: #526061;
-  background: transparent;
+  background: #f3f2ec;
+  box-shadow: none;
 }
 .edit-session:hover {
   background: #eeece4;
@@ -517,7 +524,7 @@ footer {
   gap: 8px;
   margin-top: auto;
 }
-.saved-session button {
+.saved-session button:not(.delete-session):not(.edit-session) {
   padding: 9px 11px;
   font-size: 12px;
 }
