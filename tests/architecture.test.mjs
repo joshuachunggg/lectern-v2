@@ -178,6 +178,7 @@ test('free users can compare plans and view finished transcripts', async () => {
   assert.match(app, /Upgrade to Lectern/);
   assert.match(app, /billing\?\.active && <a className="sign-out" href="#manage-plan">Manage plan<\/a>/);
   assert.match(app, /30 audio hours each month/);
+  assert.match(app, /audio hours remaining/);
   assert.match(app, /Show transcript/);
   assert.match(app, /Copy transcript/);
   assert.match(app, /select\("notes,status_message,transcript"\)/);

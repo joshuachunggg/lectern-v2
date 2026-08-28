@@ -546,7 +546,7 @@ function App() {
         <details className="profile">
           <summary><span>{user}</span><small>{billing?.active ? "Paid plan" : "Free plan"}</small></summary>
           <div>
-            <p>{billing?.active ? `$${((billing.credit_cents ?? 0) / 100).toFixed(2)} overage balance` : `${billing?.free_used ? 0 : 1} free lecture remaining`}</p>
+            <p>{billing?.active ? billing.included_seconds < 108000 ? `${Math.max(0, 30 - billing.included_seconds / 3600).toFixed(1)} audio hours remaining` : `$${((billing.credit_cents ?? 0) / 100).toFixed(2)} overage balance` : `${billing?.free_used ? 0 : 1} free lecture remaining`}</p>
             {!billing?.active && <button className="upgrade-plan" onClick={() => pricingDialog.current?.showModal()}>Upgrade</button>}
             {billing?.active && <a className="sign-out" href="#manage-plan">Manage plan</a>}
             <button className="sign-out" onClick={() => supabase.auth.signOut()}>Sign out</button>
