@@ -76,7 +76,7 @@ function App() {
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [authError, setAuthError] = useState(""),
-    [showAuth, setShowAuth] = useState(false),
+    [showAuth, setShowAuth] = useState(() => window.location.hash === "#sign-in"),
     [page, setPage] = useState(() => window.location.hash === "#saved-sessions" ? "saved" : window.location.hash === "#manage-plan" ? "plan" : "new"),
     [billing, setBilling] = useState<Billing | null>(null),
     [lectures, setLectures] = useState<Lecture[]>([]),
@@ -516,7 +516,7 @@ function App() {
           : status === "Study notes are ready."
             ? 5
             : 0;
-  const openApp = () => marketingAppUrl ? window.location.assign(marketingAppUrl) : setShowAuth(true);
+  const openApp = () => marketingAppUrl ? window.location.assign(`${marketingAppUrl}#sign-in`) : setShowAuth(true);
 
   if (!user && !showAuth)
     return (
