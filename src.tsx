@@ -13,6 +13,7 @@ if (!url || !key)
   );
 const supabase = createClient(url, key);
 const MAX_PROMPT_CHARS = 1500;
+const NOTE_DETAIL = ["Most concise", "Concise", "Balanced", "Detailed", "Most comprehensive"] as const;
 const MAX_COURSE_MATERIAL_BYTES = 5 * 1024 * 1024;
 const materialSize = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 const MAX_AUDIO_SECONDS = 90 * 60;
@@ -59,6 +60,7 @@ type Lecture = {
   transcript: string | null;
   notes: string | null;
   synthesis_prompt: string;
+  note_detail: number;
 };
 type SavedPrompt = { id: string; name: string; prompt: string };
 type Billing = { active: boolean; included_seconds: number; overage_seconds: number; credit_cents: number; free_used: boolean; cancel_at: string | null };
@@ -92,6 +94,7 @@ function App() {
     [draggingMaterials, setDraggingMaterials] = useState(false),
     [materials, setMaterials] = useState(""),
     [notePrompt, setNotePrompt] = useState(""),
+    [noteDetail, setNoteDetail] = useState(4),
     [promptName, setPromptName] = useState(""),
     [promptSession, setPromptSession] = useState<Lecture | null>(null),
     [contentSession, setContentSession] = useState<Lecture | null>(null),
@@ -378,6 +381,7 @@ function App() {
           title: lecture,
           slide_mode: slideMode,
           synthesis_prompt: notePrompt.trim(),
+          note_detail: noteDetail,
         })
         .select()
         .single();
@@ -440,6 +444,7 @@ function App() {
   function openPrompt(session: Lecture | null) {
     setPromptSession(session);
     setNotePrompt(session?.synthesis_prompt ?? notePrompt);
+    setNoteDetail(session?.note_detail ?? noteDetail);
     setPromptName("");
     promptDialog.current?.showModal();
   }
@@ -458,7 +463,7 @@ function App() {
     const session = promptSession, prompt = notePrompt.trim();
     const { error } = await supabase
       .from("lectures")
-      .update({ synthesis_prompt: prompt })
+      .update({ synthesis_prompt: prompt, note_detail: noteDetail })
       .eq("id", session.id);
     if (error) return setStatus(error.message);
     try {
@@ -742,6 +747,11 @@ function App() {
           <button className="secondary-action" onClick={() => openPrompt(null)}>
             {notePrompt ? "Edit custom note prompt" : "Add custom note prompt"}
           </button>
+          <label className="note-detail">
+            <span>Note depth <strong>{NOTE_DETAIL[noteDetail - 1]}</strong></span>
+            <input aria-label="Note depth" type="range" min="1" max="5" value={noteDetail} onChange={(event) => setNoteDetail(Number(event.target.value))} />
+            <small>Most concise <span>Most comprehensive</span></small>
+          </label>
           <div className="progress" aria-live="polite">
             <strong>{status}</strong>
             <ol>

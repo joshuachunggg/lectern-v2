@@ -422,6 +422,10 @@ textarea:focus,
   min-height: 96px;
   margin-top: 6px;
 }
+.note-detail { width: 100%; margin-top: 16px; color: #526061; font-size: 12px; font-weight: bold; }
+.note-detail > span, .note-detail small { display: flex; justify-content: space-between; gap: 12px; }
+.note-detail strong { color: var(--ink); }
+.note-detail input { width: 100%; margin: 8px 0 3px; accent-color: var(--orange); }
 .synthesis button {
   margin-top: auto;
 }

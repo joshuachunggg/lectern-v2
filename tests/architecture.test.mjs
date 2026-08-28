@@ -8,7 +8,7 @@ test('cloud worker uses OpenAI APIs and no local database', async () => {
   assert.match(worker, /gpt-transcribe/);
   assert.match(worker, /\/responses/);
   assert.match(worker, /estimated_cost_usd/);
-  assert.match(worker, /max_output_tokens: 12000/);
+  assert.match(worker, /max_output_tokens: 4000 \+ detail \* 2400/);
   assert.match(worker, /User note preferences/);
   assert.match(worker, /synthesize_only/);
   assert.match(worker, /synthesize_only && source\.source_type === 'audio'/);
@@ -20,6 +20,8 @@ test('cloud worker uses OpenAI APIs and no local database', async () => {
   assert.match(worker, /form\.append\('url', audioUrl\)/);
   assert.match(worker, /not a table of contents; never put links in the outline or headings/);
   assert.match(worker, /indent nested items with four spaces/);
+  assert.match(worker, /Always use this exact Markdown structure/);
+  assert.match(worker, /const noteDepth/);
   assert.doesNotMatch(worker, /sqlite|codex exec/i);
 });
 
@@ -30,6 +32,8 @@ test('new lectures save optional note preferences', async () => {
     'utf8',
   );
   assert.match(app, /synthesis_prompt: notePrompt\.trim\(\)/);
+  assert.match(app, /note_detail: noteDetail/);
+  assert.match(app, /aria-label="Note depth"/);
   assert.match(app, /id="note-prompt"/);
   assert.match(app, /Redo AI synthesis/);
   assert.match(app, /remarkPlugins=\{\[remarkGfm\]\}/);
@@ -41,6 +45,7 @@ test('new lectures save optional note preferences', async () => {
   assert.doesNotMatch(app, /Paste transcript/);
   assert.doesNotMatch(app, /Estimated API cost/);
   assert.match(migration, /synthesis_prompt/);
+  assert.match(await readFile('supabase/migrations/20260828000002_add_note_detail.sql', 'utf8'), /note_detail smallint not null default 3/);
 });
 
 test('saved prompts are private to the signed-in user', async () => {
