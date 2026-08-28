@@ -187,6 +187,7 @@ test('course materials can be selected before processing', async () => {
   const app = await readFile('src.tsx', 'utf8');
   const style = await readFile('style.css', 'utf8');
   assert.match(app, /function queueMaterials/);
+  assert.match(app, /Bring course context/);
   assert.match(app, /function removeMaterial/);
   assert.match(app, /PowerPoint files aren’t supported\. Export them as PDFs before uploading\./);
   assert.match(app, /accept="\.pdf,\.txt"/);

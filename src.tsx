@@ -618,6 +618,10 @@ function App() {
             <p>Course materials</p>
           </div>
           <div className="card-body">
+            <div className="materials-intro">
+              <strong>Bring course context</strong>
+              <small>Add slides, a syllabus, or assigned reading to make your notes more useful.</small>
+            </div>
             <label className="material-upload">
               <input
                 type="file"

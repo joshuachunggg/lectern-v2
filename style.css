@@ -240,6 +240,22 @@ small {
 .materials .card-body {
   justify-content: flex-start;
 }
+
+.materials-intro {
+  display: grid;
+  gap: 4px;
+  margin: 22px 0 6px;
+}
+
+.materials-intro strong {
+  font: 24px/1 Georgia, serif;
+  letter-spacing: -0.04em;
+}
+
+.materials-intro small {
+  color: #526061;
+  line-height: 1.4;
+}
 .upload-mark, .file-icon { display: grid; place-items: center; flex: none; color: var(--orange-dark); background: #fce5dc; }
 .upload-mark { width: 54px; height: 54px; margin-bottom: 18px; border-radius: 17px; font: 30px Georgia, serif; }
 .upload-mark.live { color: white; background: var(--orange); box-shadow: 0 0 0 7px #fce5dc; }
