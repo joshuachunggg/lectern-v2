@@ -29,7 +29,7 @@ Deno.serve(async request => {
         account = { ...account, subscription_status: subscription.status, period_end: end ? new Date(end * 1000).toISOString() : null };
         await admin.from('billing_accounts').update({ subscription_status: account.subscription_status, period_end: account.period_end, updated_at: new Date().toISOString() }).eq('owner_id', user.id);
       }
-      return Response.json({ active: ['active', 'trialing'].includes(account?.subscription_status ?? ''), included_used: account?.included_used ?? 0, overage_used: account?.overage_used ?? 0, credit_cents: account?.credit_cents ?? 0, free_used: account?.free_used ?? false }, { headers: cors });
+      return Response.json({ active: ['active', 'trialing'].includes(account?.subscription_status ?? ''), included_seconds: account?.included_seconds ?? 0, overage_seconds: account?.overage_seconds ?? 0, credit_cents: account?.credit_cents ?? 0, free_used: account?.free_used ?? false }, { headers: cors });
     }
     let customer = account?.stripe_customer_id;
     if (!customer) {

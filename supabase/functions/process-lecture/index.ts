@@ -46,15 +46,15 @@ Deno.serve(async request => {
       if (claimError || !claim) throw new Error(claimError?.message ?? 'Could not confirm your lecture allowance.');
     }
     if (!synthesize_only) await admin.from('lectures').update({ status: 'transcribing', status_message: 'Transcribing lecture…' }).eq('id', lecture_id);
-    const transcripts: string[] = [], materials: string[] = [], files: { type: 'input_file'; file_data: string; filename: string }[] = [], transcriptionUsage: unknown[] = lecture.api_usage?.transcription ?? []; let estimatedCost = Number(lecture.estimated_cost_usd ?? 0);
+    const transcripts: string[] = [], materials: string[] = [], files: { type: 'input_file'; file_data: string; filename: string }[] = [], transcriptionUsage: unknown[] = lecture.api_usage?.transcription ?? []; let estimatedCost = Number(lecture.estimated_cost_usd ?? 0), audioSeconds = 0;
     for (const source of sources ?? []) {
       if (synthesize_only && source.source_type === 'audio') continue;
-      if (source.source_type === 'audio' && source.transcript) { transcripts.push(source.transcript); continue; }
+      if (source.source_type === 'audio' && source.transcript) { transcripts.push(source.transcript); audioSeconds += source.duration_seconds ?? 0; continue; }
       if (source.source_type === 'audio') {
         const { data: audioUrl } = transcriptionProvider === 'groq' ? await admin.storage.from('lecture-files').createSignedUrl(source.storage_path, 3600) : { data: null };
         const { data: file, error } = audioUrl ? { data: null, error: null } : await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file && !audioUrl) throw error ?? new Error(`Could not download ${source.filename}.`);
-        const result = await transcribe(file, source.filename, audioUrl?.signedUrl); transcripts.push(result.text); transcriptionUsage.push(result.usage); estimatedCost += result.cost;
-        const { error: sourceError } = await admin.from('lecture_sources').update({ transcript: result.text }).eq('id', source.id); if (sourceError) throw sourceError;
+        const result = await transcribe(file, source.filename, audioUrl?.signedUrl); const seconds = Number((result.usage as any).seconds ?? source.duration_seconds ?? 0); transcripts.push(result.text); audioSeconds += seconds; transcriptionUsage.push(result.usage); estimatedCost += result.cost;
+        const { error: sourceError } = await admin.from('lecture_sources').update({ transcript: result.text, duration_seconds: seconds }).eq('id', source.id); if (sourceError) throw sourceError;
         const { error: lectureError } = await admin.from('lectures').update({ transcript: transcripts.join('\n\n'), api_usage: { ...lecture.api_usage, transcription: transcriptionUsage }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id); if (lectureError) throw lectureError;
       }
       else {
@@ -62,6 +62,10 @@ Deno.serve(async request => {
         if (lecture.slide_mode === 'original' || !source.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: `data:${source.content_type};base64,${base64(new Uint8Array(await file.arrayBuffer()))}`, filename: source.filename });
         else { const text = await file.text(); if (text.length > 100_000) throw new Error('Text materials must be 100,000 characters or fewer.'); materials.push(`## ${source.filename}\n${text}`); }
       }
+    }
+    if (!synthesize_only) {
+      const { error } = await admin.rpc('settle_lecture_time', { p_lecture_id: lecture_id, p_owner_id: user.id, p_seconds: Math.ceil(audioSeconds) });
+      if (error) throw new Error(error.message);
     }
     const transcript = synthesize_only ? lecture.transcript ?? '' : transcripts.join('\n\n'), context = materials.join('\n\n') || '[No text materials were supplied.]';
     if (synthesize_only && !transcript) throw new Error('No saved transcript is available for this session.');

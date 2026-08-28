@@ -61,7 +61,7 @@ type Lecture = {
   synthesis_prompt: string;
 };
 type SavedPrompt = { id: string; name: string; prompt: string };
-type Billing = { active: boolean; included_used: number; overage_used: number; credit_cents: number; free_used: boolean };
+type Billing = { active: boolean; included_seconds: number; overage_seconds: number; credit_cents: number; free_used: boolean };
 
 function App() {
   const recorder = useRef<MediaRecorder | null>(null),
@@ -196,12 +196,14 @@ function App() {
         contentType: file.type || "application/octet-stream",
       });
     if (uploadError) throw uploadError;
+    const sourceType = file.type.startsWith("audio/") || AUDIO_EXTENSIONS.has(file.name.toLowerCase().split(".").pop() ?? "") ? "audio" : "material";
     const { error } = await supabase.from("lecture_sources").insert({
       lecture_id: id,
       storage_path: path,
       filename: file.name,
       content_type: file.type || "application/octet-stream",
-      source_type: file.type.startsWith("audio/") || AUDIO_EXTENSIONS.has(file.name.toLowerCase().split(".").pop() ?? "") ? "audio" : "material",
+      source_type: sourceType,
+      duration_seconds: sourceType === "audio" ? Math.ceil(await audioDuration(file)) : null,
     });
     if (error) throw error;
   }
@@ -546,8 +548,8 @@ function App() {
         <p className="eyebrow">Manage plan</p>
         <h1>{billing?.active ? "Lectern plan" : "Free plan"}</h1>
         {billing?.active ? <>
-          <p>Includes 24 lectures each month. Overage lectures are $0.50 and use your non-expiring balance.</p>
-          <dl><div><dt>Included lectures remaining</dt><dd>{Math.max(0, 24 - billing.included_used)}</dd></div><div><dt>Overage balance</dt><dd>${(billing.credit_cents / 100).toFixed(2)}</dd></div></dl>
+          <p>Includes 30 audio hours each month. Overage audio is $0.50 per hour and uses your non-expiring balance.</p>
+          <dl><div><dt>Included audio remaining</dt><dd>{Math.max(0, 30 - billing.included_seconds / 3600).toFixed(1)} hr</dd></div><div><dt>Overage balance</dt><dd>${(billing.credit_cents / 100).toFixed(2)}</dd></div></dl>
           <div className="refill">
             <div><strong>Add overage funds</strong><small>Any amount from $0.50 to $100.</small></div>
             <label className="credit-amount"><span>$</span><input aria-label="Overage fund amount" type="number" min="0.50" max="100" step="0.01" inputMode="decimal" value={creditAmount} onChange={event => setCreditAmount(event.target.value)} /></label>
@@ -555,7 +557,7 @@ function App() {
           </div>
           <button className="manage-subscription" onClick={openStripeBilling}>Manage subscription in Stripe</button>
         </> : <>
-          <p>Your first lecture is free. The Lectern plan is $10/month and includes 24 lectures. Overage lectures cost $0.50 from a prepaid balance.</p>
+          <p>Your first lecture is free. The Lectern plan is $10/month and includes 30 audio hours. Overage audio costs $0.50 per hour from a prepaid balance.</p>
           <button onClick={() => pricingDialog.current?.showModal()}>View upgrade options</button>
         </>}
       </section>}
@@ -858,7 +860,7 @@ function App() {
         </div>
         <div className="pricing-options">
           <section><p className="eyebrow">Free</p><h3>Try one lecture</h3><p>Get one free lecture, including your finished study notes.</p></section>
-          <section className="paid-plan"><p className="eyebrow">Lectern plan</p><h3>$10 / month</h3><p>24 lectures each month. After that, lectures are $0.50 each from your prepaid balance.</p><button onClick={openStripeBilling}>Upgrade to Lectern</button></section>
+          <section className="paid-plan"><p className="eyebrow">Lectern plan</p><h3>$10 / month</h3><p>30 audio hours each month. After that, audio is $0.50 per hour from your prepaid balance.</p><button onClick={openStripeBilling}>Upgrade to Lectern</button></section>
         </div>
       </dialog>
       {notes && (

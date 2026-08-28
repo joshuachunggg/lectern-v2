@@ -36,9 +36,9 @@ Deno.serve(async request => {
   if (event.type.startsWith('customer.subscription.')) await syncSubscription(object.id, owner);
   if (event.type === 'invoice.paid' && typeof object.subscription === 'string') {
     await syncSubscription(object.subscription);
-    const account = admin.from('billing_accounts').update({ included_used: 0, updated_at: new Date().toISOString() }).eq('stripe_customer_id', object.customer).eq('stripe_subscription_id', object.subscription);
+    const account = admin.from('billing_accounts').update({ included_seconds: 0, updated_at: new Date().toISOString() }).eq('stripe_customer_id', object.customer).eq('stripe_subscription_id', object.subscription);
     await account;
-    await admin.from('billing_accounts').update({ overage_used: 0 }).eq('stripe_customer_id', object.customer).eq('stripe_subscription_id', object.subscription);
+    await admin.from('billing_accounts').update({ overage_seconds: 0 }).eq('stripe_customer_id', object.customer).eq('stripe_subscription_id', object.subscription);
   }
   if (event.type === 'invoice.payment_failed') await admin.from('billing_accounts').update({ subscription_status: 'past_due', updated_at: new Date().toISOString() }).eq('stripe_customer_id', object.customer);
   return new Response('ok');

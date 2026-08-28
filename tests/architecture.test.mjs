@@ -79,7 +79,7 @@ test('processing resumes from completed source transcriptions', async () => {
   const app = await readFile('src.tsx', 'utf8');
   assert.match(migration, /add column transcript text/);
   assert.match(worker, /source\.source_type === 'audio' && source\.transcript/);
-  assert.match(worker, /from\('lecture_sources'\)\.update\(\{ transcript: result\.text \}\)/);
+  assert.match(worker, /from\('lecture_sources'\)\.update\(\{ transcript: result\.text, duration_seconds: seconds \}\)/);
   assert.match(app, /Retry processing/);
 });
 
@@ -105,6 +105,7 @@ test('billing and source limits are enforced before model work starts', async ()
   const parameterizedFreeLecture = await readFile('supabase/migrations/20260826000019_parameterized_free_lecture_count.sql', 'utf8');
   const claimReturn = await readFile('supabase/migrations/20260827000000_return_after_claim.sql', 'utf8');
   const prepaidCredits = await readFile('supabase/migrations/20260827000004_prepaid_overage_credits.sql', 'utf8');
+  const timeBilling = await readFile('supabase/migrations/20260828000000_time_based_billing.sql', 'utf8');
   assert.match(worker, /claim_lecture_for_owner_v2/);
   assert.match(app, /submitting\.current/);
   assert.match(billing, /mode: 'subscription'/);
@@ -132,6 +133,10 @@ test('billing and source limits are enforced before model work starts', async ()
   assert.match(prepaidCredits, /credit_cents = credit_cents - 50/);
   assert.match(prepaidCredits, /credits < 50/);
   assert.match(prepaidCredits, /on conflict do nothing/);
+  assert.match(timeBilling, /included_seconds integer/);
+  assert.match(timeBilling, /settle_lecture_time/);
+  assert.match(timeBilling, /108000/);
+  assert.match(worker, /settle_lecture_time/);
   assert.doesNotMatch(worker, /materialObjects/);
 });
 
@@ -150,7 +155,7 @@ test('billing handles subscriptions, prepaid deposits, and the UI separates save
   assert.match(app, /non-expiring balance/);
   assert.match(webhook, /overage_credit/);
   assert.match(webhook, /record_billing_credit_deposit/);
-  assert.match(webhook, /overage_used: 0/);
+  assert.match(webhook, /overage_seconds: 0/);
 });
 
 test('recorded and uploaded audio is capped at a lecture length and prepared for transcription', async () => {
@@ -172,7 +177,7 @@ test('free users can compare plans and view finished transcripts', async () => {
   const app = await readFile('src.tsx', 'utf8');
   assert.match(app, /Upgrade to Lectern/);
   assert.match(app, /billing\?\.active && <a className="sign-out" href="#manage-plan">Manage plan<\/a>/);
-  assert.match(app, /24 lectures each month/);
+  assert.match(app, /30 audio hours each month/);
   assert.match(app, /Show transcript/);
   assert.match(app, /Copy transcript/);
   assert.match(app, /select\("notes,status_message,transcript"\)/);
