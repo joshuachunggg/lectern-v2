@@ -21,7 +21,7 @@ Deno.serve(async request => {
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const client = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: token } } });
     const { data: { user } } = await client.auth.getUser(); if (!user) throw new Error('Sign in required.');
-    const { action, returnUrl: requestedReturnUrl } = await request.json();
+    const { action, creditCents, returnUrl: requestedReturnUrl } = await request.json();
     let { data: account } = await admin.from('billing_accounts').select('*').eq('owner_id', user.id).maybeSingle();
     if (action === 'status') {
       if (account?.stripe_subscription_id) {
@@ -45,7 +45,8 @@ Deno.serve(async request => {
     }
     if (action === 'credit_checkout') {
       if (!['active', 'trialing'].includes(account?.subscription_status ?? '')) throw new Error('An active subscription is required to add overage funds.');
-      const session = await stripe('/checkout/sessions', new URLSearchParams({ mode: 'payment', customer, success_url: `${returnUrl.href}?billing=credit-added`, cancel_url: `${returnUrl.href}?billing=cancelled`, 'line_items[0][price_data][currency]': 'usd', 'line_items[0][price_data][product_data][name]': 'Lectern overage balance', 'line_items[0][price_data][unit_amount]': '500', 'line_items[0][quantity]': '1', 'line_items[0][adjustable_quantity][enabled]': 'true', 'line_items[0][adjustable_quantity][minimum]': '1', 'line_items[0][adjustable_quantity][maximum]': '20', 'metadata[owner_id]': user.id, 'metadata[purpose]': 'overage_credit' }));
+      if (!Number.isInteger(creditCents) || creditCents < 50 || creditCents > 10_000) throw new Error('Enter an amount from $0.50 to $100.00.');
+      const session = await stripe('/checkout/sessions', new URLSearchParams({ mode: 'payment', customer, success_url: `${returnUrl.href}?billing=credit-added`, cancel_url: `${returnUrl.href}?billing=cancelled`, 'line_items[0][price_data][currency]': 'usd', 'line_items[0][price_data][product_data][name]': 'Lectern overage balance', 'line_items[0][price_data][unit_amount]': String(creditCents), 'line_items[0][quantity]': '1', 'metadata[owner_id]': user.id, 'metadata[purpose]': 'overage_credit' }));
       return Response.json({ url: session.url }, { headers: cors });
     }
     if (action !== 'checkout') throw new Error('Invalid billing action.');

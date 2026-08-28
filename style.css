@@ -139,6 +139,9 @@ small {
 .plan dl div { padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
 .plan dt { color: #526061; font-size: 12px; }
 .plan dd { margin: 5px 0 0; font-size: 21px; font-weight: bold; }
+.plan > button + button { margin-left: 8px; }
+.credit-amount { margin-right: 8px; font-size: 14px; font-weight: bold; }
+.credit-amount input { width: 90px; margin-left: 6px; padding: 10px; }
 .eyebrow,
 .card-heading p {
   color: var(--orange);

@@ -5,7 +5,7 @@ Cloud version of Lectern. The original local v1 remains separate and unchanged.
 ## Setup
 
 1. Create or select a Supabase project, then run `supabase link --project-ref YOUR_REF` and `supabase db push`.
-2. In Stripe, create a $10/month recurring price and configure the Stripe customer portal. Overage deposits use Checkout directly in $5 increments; no meter or overage price is needed.
+2. In Stripe, create a $10/month recurring price and configure the Stripe customer portal. Overage deposits use Checkout directly for a custom $0.50–$100 amount; no meter or overage price is needed.
 3. Set Edge Function secrets: `supabase secrets set OPENAI_API_KEY=... STRIPE_SECRET_KEY=... STRIPE_BASE_PRICE_ID=price_... STRIPE_WEBHOOK_SECRET=whsec_...`.
 4. Deploy the functions: `supabase functions deploy process-lecture billing stripe-webhook`.
 5. Add a Stripe webhook endpoint at `https://YOUR_PROJECT.supabase.co/functions/v1/stripe-webhook` for `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, and `invoice.paid`.

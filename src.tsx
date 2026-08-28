@@ -97,6 +97,7 @@ function App() {
     [titleDraft, setTitleDraft] = useState(""),
     [status, setStatus] = useState("Ready to record"),
     [processing, setProcessing] = useState(false),
+    [creditAmount, setCreditAmount] = useState("5.00"),
     [notes, setNotes] = useState("");
   const loadLectures = async () => {
     const { data } = await supabase
@@ -173,7 +174,9 @@ function App() {
     window.location.assign(data.url);
   }
   async function addOverageFunds() {
-    const { data, error } = await supabase.functions.invoke("billing", { body: { action: "credit_checkout", returnUrl: `${window.location.origin}${window.location.pathname}#manage-plan` } });
+    const creditCents = Math.round(Number(creditAmount) * 100);
+    if (!/^\d+(?:\.\d{1,2})?$/.test(creditAmount) || creditCents < 50 || creditCents > 10_000) return setStatus("Enter an amount from $0.50 to $100.00.");
+    const { data, error } = await supabase.functions.invoke("billing", { body: { action: "credit_checkout", creditCents, returnUrl: `${window.location.origin}${window.location.pathname}#manage-plan` } });
     if (error || !data?.url) return setStatus(error?.message ?? "Could not open checkout.");
     window.location.assign(data.url);
   }
@@ -552,7 +555,7 @@ function App() {
         {billing?.active ? <>
           <p>Includes 24 lectures each month. Overage lectures are $0.50 and use your non-expiring balance.</p>
           <dl><div><dt>Included lectures remaining</dt><dd>{Math.max(0, 24 - billing.included_used)}</dd></div><div><dt>Overage balance</dt><dd>${(billing.credit_cents / 100).toFixed(2)}</dd></div></dl>
-          <button onClick={addOverageFunds}>Add overage funds</button><button onClick={openStripeBilling}>Manage subscription in Stripe</button>
+          <label className="credit-amount">Add funds <input type="number" min="0.50" max="100" step="0.01" inputMode="decimal" value={creditAmount} onChange={event => setCreditAmount(event.target.value)} /></label><button onClick={addOverageFunds}>Add overage funds</button><button onClick={openStripeBilling}>Manage subscription in Stripe</button>
         </> : <>
           <p>Your first lecture is free. The Lectern plan is $10/month and includes 24 lectures. Overage lectures cost $0.50 from a prepaid balance.</p>
           <button onClick={openStripeBilling}>Subscribe in Stripe</button>

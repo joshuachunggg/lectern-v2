@@ -111,6 +111,9 @@ test('billing and source limits are enforced before model work starts', async ()
   assert.match(billing, /credit_checkout/);
   assert.match(billing, /mode: 'payment'/);
   assert.match(billing, /credit_cents/);
+  assert.match(billing, /Number\.isInteger\(creditCents\)/);
+  assert.match(billing, /unit_amount\]': String\(creditCents\)/);
+  assert.match(app, /min="0\.50" max="100" step="0\.01"/);
   assert.match(billing, /stripeSubscription\(account\.stripe_subscription_id\)/);
   assert.match(billing, /returnUrl\.origin !== origin/);
   assert.match(app, /returnUrl: `\$\{window\.location\.origin\}\$\{window\.location\.pathname\}#manage-plan`/);
