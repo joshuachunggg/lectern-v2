@@ -153,7 +153,7 @@ test('billing handles subscriptions, prepaid deposits, and the UI separates save
   assert.match(webhook, /overage_used: 0/);
 });
 
-test('uploaded audio is capped at a lecture length and prepared for transcription', async () => {
+test('recorded and uploaded audio is capped at a lecture length and prepared for transcription', async () => {
   const app = await readFile('src.tsx', 'utf8');
   assert.match(app, /MAX_AUDIO_SECONDS = 90 \* 60/);
   assert.match(app, /MAX_TRANSCRIPTION_FILE_BYTES = 24 \* 1024 \* 1024/);
@@ -162,9 +162,19 @@ test('uploaded audio is capped at a lecture length and prepared for transcriptio
   assert.match(app, /repairWav/);
   assert.match(app, /chunkAudio\(file\)/);
   assert.match(app, /async function chunkStoredAudio/);
-  assert.doesNotMatch(app, /MediaRecorder/);
-  assert.doesNotMatch(app, /Start recording/);
+  assert.match(app, /new MediaRecorder\(stream, \{ audioBitsPerSecond: 32000 \}\)/);
+  assert.match(app, /channelCount: 1/);
+  assert.match(app, /Start recording/);
   assert.match(app, /at most 90 minutes of audio/);
+});
+
+test('free users can compare plans and view finished transcripts', async () => {
+  const app = await readFile('src.tsx', 'utf8');
+  assert.match(app, /Upgrade to Lectern/);
+  assert.match(app, /24 lectures each month/);
+  assert.match(app, /Show transcript/);
+  assert.match(app, /Copy transcript/);
+  assert.match(app, /select\("notes,status_message,transcript"\)/);
 });
 
 test('course materials can be selected before processing', async () => {

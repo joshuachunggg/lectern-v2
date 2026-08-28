@@ -109,6 +109,7 @@ header nav a.active {
 .profile p { margin: 0 0 12px; color: #526061; font-size: 13px; line-height: 1.4; }
 .profile .sign-out { display: block; margin-top: 9px; }
 .profile a.sign-out { color: var(--ink); font-size: 13px; }
+.profile .upgrade-plan { width: 100%; margin: 0 0 3px; padding: 8px 10px; font-size: 12px; }
 .brand {
   color: var(--ink);
   font-family: Georgia, serif;
@@ -233,6 +234,7 @@ small {
 }
 .upload-mark, .file-icon { display: grid; place-items: center; flex: none; color: var(--orange-dark); background: #fce5dc; }
 .upload-mark { width: 54px; height: 54px; margin-bottom: 18px; border-radius: 17px; font: 30px Georgia, serif; }
+.upload-mark.live { color: white; background: var(--orange); box-shadow: 0 0 0 7px #fce5dc; }
 .audio-card h2 { margin: 0; font: 31px/1 Georgia, serif; letter-spacing: -0.04em; }
 .audio-card .card-body > p:not(.status) { max-width: 290px; margin: 12px 0 0; color: #526061; }
 .status {
@@ -417,6 +419,9 @@ footer {
 .audio-upload input {
   display: none;
 }
+.recording-control { width: fit-content; margin-bottom: 9px; }
+.recording-control.stop { border-color: #8a3434; background: linear-gradient(135deg, #d96752, #8a3434); }
+.audio-card audio { width: 100%; height: 34px; margin-top: 12px; }
 .history {
   margin: 76px 0 34px;
 }
@@ -594,6 +599,13 @@ footer {
 .modal > button:last-child {
   margin-top: 16px;
 }
+.pricing-options { display: grid; gap: 12px; margin-top: 18px; }
+.pricing-options section { padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: #fffefa; }
+.pricing-options .paid-plan { border-color: #e7b7a5; background: #fff5f0; }
+.pricing-options .eyebrow { margin: 0; }
+.pricing-options h3 { margin: 5px 0 8px; font: 25px Georgia, serif; }
+.pricing-options p:not(.eyebrow) { margin: 0; color: #526061; font-size: 14px; line-height: 1.45; }
+.pricing-options button { margin-top: 14px; }
 .notes {
   width: min(860px, calc(100% - 32px));
   max-width: 860px;
@@ -637,6 +649,7 @@ footer {
     16px/1.75 Georgia,
     serif;
 }
+.transcript-content { margin: 20px 0 0; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: #fffefa; color: #26383a; font: 14px/1.65 Arial, sans-serif; white-space: pre-wrap; }
 .notes-content > :first-child {
   margin-top: 0;
 }

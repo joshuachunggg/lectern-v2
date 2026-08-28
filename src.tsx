@@ -48,6 +48,7 @@ const chunkAudio = async (file: File) => {
     return Array.from({ length: Math.ceil(samples.length / chunkSamples) }, (_, index) => new File([wav(samples, index * chunkSamples, Math.min(samples.length, (index + 1) * chunkSamples))], `${name}-${String(index + 1).padStart(2, "0")}.wav`, { type: "audio/wav" }));
   } finally { await context.close(); }
 };
+const clock = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${Math.floor(seconds % 60).toString().padStart(2, "0")}`;
 type SlideMode = "text" | "original";
 type Lecture = {
   id: string;
@@ -55,6 +56,7 @@ type Lecture = {
   slide_mode: SlideMode;
   status: string;
   status_message: string;
+  transcript: string | null;
   notes: string | null;
   synthesis_prompt: string;
 };
@@ -62,9 +64,12 @@ type SavedPrompt = { id: string; name: string; prompt: string };
 type Billing = { active: boolean; included_used: number; overage_used: number; credit_cents: number; free_used: boolean };
 
 function App() {
-  const notesDialog = useRef<HTMLDialogElement | null>(null),
+  const recorder = useRef<MediaRecorder | null>(null),
+    timer = useRef<ReturnType<typeof setInterval> | null>(null),
+    notesDialog = useRef<HTMLDialogElement | null>(null),
     contentDialog = useRef<HTMLDialogElement | null>(null),
     promptDialog = useRef<HTMLDialogElement | null>(null),
+    pricingDialog = useRef<HTMLDialogElement | null>(null),
     submitting = useRef(false);
   const [user, setUser] = useState<string | null>(null),
     [email, setEmail] = useState(""),
@@ -76,6 +81,10 @@ function App() {
     [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]),
     [lecture, setLecture] = useState("Untitled lecture"),
     [slideMode, setSlideMode] = useState<SlideMode>("text"),
+    [recording, setRecording] = useState(false),
+    [seconds, setSeconds] = useState(0),
+    [audio, setAudio] = useState<Blob | null>(null),
+    [audioUrl, setAudioUrl] = useState(""),
     [audioFiles, setAudioFiles] = useState<File[]>([]),
     [files, setFiles] = useState<File[]>([]),
     [materials, setMaterials] = useState(""),
@@ -88,7 +97,9 @@ function App() {
     [status, setStatus] = useState("Add lecture audio to begin"),
     [processing, setProcessing] = useState(false),
     [creditAmount, setCreditAmount] = useState("5.00"),
-    [notes, setNotes] = useState("");
+    [notes, setNotes] = useState(""),
+    [transcript, setTranscript] = useState(""),
+    [showTranscript, setShowTranscript] = useState(false);
   const loadLectures = async () => {
     const { data } = await supabase
       .from("lectures")
@@ -129,6 +140,7 @@ function App() {
     });
     return () => {
       data.subscription.unsubscribe();
+      if (timer.current) clearInterval(timer.current);
     };
   }, []);
   useEffect(() => {
@@ -162,6 +174,13 @@ function App() {
     if (error || !data?.url) return setStatus(error?.message ?? "Could not open billing.");
     window.location.assign(data.url);
   }
+  const openNotes = (session: Pick<Lecture, "notes" | "transcript">) => {
+    setTranscript(session.transcript ?? "");
+    setShowTranscript(false);
+    setNotes(session.notes ?? "");
+  };
+  const copyToClipboard = (text: string, message: string) =>
+    navigator.clipboard.writeText(text).then(() => setStatus(message));
   async function addOverageFunds() {
     const creditCents = Math.round(Number(creditAmount) * 100);
     if (!/^\d+(?:\.\d{1,2})?$/.test(creditAmount) || creditCents < 50 || creditCents > 10_000) return setStatus("Enter an amount from $0.50 to $100.00.");
@@ -209,7 +228,7 @@ function App() {
     synthesizeOnly = false,
   ) {
     setProcessing(true);
-    setNotes("");
+    setNotes(""); setTranscript(""); setShowTranscript(false);
     setStatus(message);
     let poll: ReturnType<typeof window.setInterval> | undefined;
     try {
@@ -236,10 +255,10 @@ function App() {
       await loadBilling();
       const { data } = await supabase
         .from("lectures")
-        .select("notes,status_message")
+        .select("notes,status_message,transcript")
         .eq("id", id)
         .single();
-      if (data?.notes) setNotes(data.notes);
+      if (data?.notes) openNotes(data);
       if (data?.status_message) setStatus(data.status_message);
     } catch (error) {
       setStatus(
@@ -250,6 +269,23 @@ function App() {
       if (poll) clearInterval(poll);
       setProcessing(false);
     }
+  }
+  async function toggleRecording() {
+    if (recording) return recorder.current?.stop();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } }), chunks: Blob[] = [], next = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
+      next.ondataavailable = (event) => event.data.size && chunks.push(event.data);
+      next.onstop = () => {
+        const saved = new Blob(chunks, { type: next.mimeType });
+        setAudio(saved); setAudioUrl(URL.createObjectURL(saved));
+        stream.getTracks().forEach((track) => track.stop());
+        if (timer.current) clearInterval(timer.current);
+        setRecording(false); setStatus("Recording ready to process");
+      };
+      recorder.current = next; next.start(); setSeconds(0);
+      timer.current = setInterval(() => setSeconds((value) => { if (value + 1 >= MAX_AUDIO_SECONDS) { next.stop(); return MAX_AUDIO_SECONDS; } return value + 1; }), 1000);
+      setRecording(true); setStatus("Recording");
+    } catch { setStatus("Microphone access is required to record."); }
   }
   function queueMaterials(added: File[]) {
     const accepted = added.filter(isMaterial), rejected = added.filter((file) => !isMaterial(file));
@@ -286,6 +322,7 @@ function App() {
   }
   async function makeNotes() {
     const sources = [
+      ...(audio ? [new File([audio], "recording.webm", { type: audio.type || "audio/webm" })] : []),
       ...audioFiles,
       ...files,
       ...(materials.trim()
@@ -326,6 +363,7 @@ function App() {
         await upload(created.id, file);
       }
       await processLecture(created.id, "Starting transcription…");
+      setAudio(null); setAudioUrl("");
       setAudioFiles([]);
       setFiles([]);
       setMaterials("");
@@ -436,7 +474,7 @@ function App() {
     await loadLectures();
   }
   const canProcess = Boolean(
-    audioFiles.length || files.length || materials.trim(),
+    audio || audioFiles.length || files.length || materials.trim(),
   );
   const courseMaterialBytes = files.reduce((total, file) => total + file.size, 0);
   const stage =
@@ -498,6 +536,7 @@ function App() {
           <summary><span>{user}</span><small>{billing?.active ? "Paid plan" : "Free plan"}</small></summary>
           <div>
             <p>{billing?.active ? `$${((billing.credit_cents ?? 0) / 100).toFixed(2)} overage balance` : `${billing?.free_used ? 0 : 1} free lecture remaining`}</p>
+            {!billing?.active && <button className="upgrade-plan" onClick={() => pricingDialog.current?.showModal()}>Upgrade</button>}
             <a className="sign-out" href="#manage-plan">Manage plan</a>
             <button className="sign-out" onClick={() => supabase.auth.signOut()}>Sign out</button>
           </div>
@@ -517,7 +556,7 @@ function App() {
           <button className="manage-subscription" onClick={openStripeBilling}>Manage subscription in Stripe</button>
         </> : <>
           <p>Your first lecture is free. The Lectern plan is $10/month and includes 24 lectures. Overage lectures cost $0.50 from a prepaid balance.</p>
-          <button onClick={openStripeBilling}>Subscribe in Stripe</button>
+          <button onClick={() => pricingDialog.current?.showModal()}>View upgrade options</button>
         </>}
       </section>}
       {page === "new" && <>
@@ -540,12 +579,15 @@ function App() {
             <p>Lecture audio</p>
           </div>
           <div className="card-body">
-            <div className="upload-mark" aria-hidden="true">♫</div>
-            <h2>Upload lecture audio</h2>
-            <p>Choose one or more recordings. We’ll process them in the order shown.</p>
+            <div className={`upload-mark ${recording ? "live" : ""}`} aria-hidden="true">♫</div>
+            <h2>Record or upload audio</h2>
+            <p>Record in Lectern or choose recordings from your device.</p>
             <p className="status" aria-live="polite">
               {status}
             </p>
+            <button className={`recording-control ${recording ? "stop" : ""}`} onClick={toggleRecording}>
+              {recording ? `Stop recording · ${clock(seconds)}` : "Start recording"}
+            </button>
             <label className="audio-upload">
               <input
                 type="file"
@@ -565,6 +607,7 @@ function App() {
                 </ul>
               </div>
             )}
+            {audioUrl && <audio controls src={audioUrl}>Your browser cannot play this recording.</audio>}
           </div>
         </article>
         <article className="materials card">
@@ -717,7 +760,7 @@ function App() {
                 </small>
                 <div>
                   {session.notes && (
-                    <button onClick={() => setNotes(session.notes ?? "")}>
+                    <button onClick={() => openNotes(session)}>
                       Open notes
                     </button>
                   )}
@@ -808,6 +851,16 @@ function App() {
           <button onClick={() => promptDialog.current?.close()}>Use this prompt</button>
         )}
       </dialog>
+      <dialog className="modal pricing-modal" ref={pricingDialog}>
+        <div className="modal-heading">
+          <h2>Choose your plan</h2>
+          <button type="button" onClick={() => pricingDialog.current?.close()}>Close</button>
+        </div>
+        <div className="pricing-options">
+          <section><p className="eyebrow">Free</p><h3>Try one lecture</h3><p>Get one free lecture, including your finished study notes.</p></section>
+          <section className="paid-plan"><p className="eyebrow">Lectern plan</p><h3>$10 / month</h3><p>24 lectures each month. After that, lectures are $0.50 each from your prepaid balance.</p><button onClick={openStripeBilling}>Upgrade to Lectern</button></section>
+        </div>
+      </dialog>
       {notes && (
         <dialog
           className="notes"
@@ -820,21 +873,12 @@ function App() {
           <div className="notes-heading">
             <p className="eyebrow">Study notes</p>
             <div>
-              <button
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(notes.replace(/^( +)([-*+]|\d+[.)]) /gm, (_, indent, marker) => `${" ".repeat(Math.ceil(indent.length / 4) * 4)}${marker} `).replace(/[ \t]+$/gm, ""))
-                    .then(() => setStatus("Notes copied to clipboard."))
-                }
-              >
-                Copy all
-              </button>
+              {transcript && <button onClick={() => setShowTranscript((value) => !value)}>{showTranscript ? "Show notes" : "Show transcript"}</button>}
+              <button onClick={() => copyToClipboard(showTranscript ? transcript : notes.replace(/^( +)([-*+]|\d+[.)]) /gm, (_, indent, marker) => `${" ".repeat(Math.ceil(indent.length / 4) * 4)}${marker} `).replace(/[ \t]+$/gm, ""), showTranscript ? "Transcript copied to clipboard." : "Notes copied to clipboard.")}>{showTranscript ? "Copy transcript" : "Copy all"}</button>
               <button onClick={() => setNotes("")}>Close</button>
             </div>
           </div>
-          <article className="notes-content">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{notes}</ReactMarkdown>
-          </article>
+          {showTranscript ? <pre className="transcript-content">{transcript}</pre> : <article className="notes-content"><ReactMarkdown remarkPlugins={[remarkGfm]}>{notes}</ReactMarkdown></article>}
         </dialog>
       )}
       <footer>
