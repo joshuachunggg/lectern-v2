@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -305,6 +305,10 @@ function App() {
   function addFiles(event: ChangeEvent<HTMLInputElement>) {
     queueMaterials(Array.from(event.target.files ?? []));
     event.target.value = "";
+  }
+  function dropMaterials(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    queueMaterials(Array.from(event.dataTransfer.files));
   }
   function removeMaterial(index: number) {
     setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index));
@@ -618,20 +622,17 @@ function App() {
             <p>Course materials</p>
           </div>
           <div className="card-body">
-            <div className="materials-intro">
-              <strong>Bring course context</strong>
-              <small>Add slides, a syllabus, or assigned reading to make your notes more useful.</small>
-            </div>
-            <label className="material-upload">
+            <label className="material-dropzone" onDragOver={(event) => event.preventDefault()} onDrop={dropMaterials}>
               <input
                 type="file"
                 accept=".pdf,.txt"
                 multiple
                 onChange={addFiles}
               />
-              <span>Choose course file</span>
+              <span aria-hidden="true">▤</span>
+              <strong>Drop course files here</strong>
+              <small>or choose PDF or plain text</small>
             </label>
-            <small className="upload-hint">PDF or plain text. Export PowerPoint files as PDFs first.</small>
             <label className="materials-label">
               <input
                 type="checkbox"
