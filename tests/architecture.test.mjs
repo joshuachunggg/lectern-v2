@@ -153,7 +153,7 @@ test('billing handles subscriptions, prepaid deposits, and the UI separates save
   assert.match(webhook, /overage_used: 0/);
 });
 
-test('browser recordings are compact and capped at a lecture length', async () => {
+test('uploaded audio is capped at a lecture length and prepared for transcription', async () => {
   const app = await readFile('src.tsx', 'utf8');
   assert.match(app, /MAX_AUDIO_SECONDS = 90 \* 60/);
   assert.match(app, /MAX_TRANSCRIPTION_FILE_BYTES = 24 \* 1024 \* 1024/);
@@ -162,8 +162,8 @@ test('browser recordings are compact and capped at a lecture length', async () =
   assert.match(app, /repairWav/);
   assert.match(app, /chunkAudio\(file\)/);
   assert.match(app, /async function chunkStoredAudio/);
-  assert.match(app, /audioBitsPerSecond: 32000/);
-  assert.match(app, /channelCount: 1/);
+  assert.doesNotMatch(app, /MediaRecorder/);
+  assert.doesNotMatch(app, /Start recording/);
   assert.match(app, /at most 90 minutes of audio/);
 });
 
@@ -175,6 +175,6 @@ test('course materials can be selected or dropped before processing', async () =
   assert.match(app, /onDrop=\{dropFiles\}/);
   assert.match(app, /Course materials can total at most 5 MB/);
   assert.match(app, /status === "Study notes are ready\."/);
-  assert.match(style, /\.queued-materials ul \{\n  max-height: 78px;/);
+  assert.match(style, /\.file-queue ul \{ display: grid; gap: 7px; max-height: 136px;/);
   assert.doesNotMatch(style, /^ul \{/m);
 });

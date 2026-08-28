@@ -46,12 +46,6 @@ const chunkAudio = async (file: File) => {
     return Array.from({ length: Math.ceil(samples.length / chunkSamples) }, (_, index) => new File([wav(samples, index * chunkSamples, Math.min(samples.length, (index + 1) * chunkSamples))], `${name}-${String(index + 1).padStart(2, "0")}.wav`, { type: "audio/wav" }));
   } finally { await context.close(); }
 };
-const clock = (seconds: number) =>
-  `${Math.floor(seconds / 60)
-    .toString()
-    .padStart(2, "0")}:${Math.floor(seconds % 60)
-    .toString()
-    .padStart(2, "0")}`;
 type SlideMode = "text" | "original";
 type Lecture = {
   id: string;
@@ -66,9 +60,7 @@ type SavedPrompt = { id: string; name: string; prompt: string };
 type Billing = { active: boolean; included_used: number; overage_used: number; credit_cents: number; free_used: boolean };
 
 function App() {
-  const recorder = useRef<MediaRecorder | null>(null),
-    timer = useRef<ReturnType<typeof setInterval> | null>(null),
-    notesDialog = useRef<HTMLDialogElement | null>(null),
+  const notesDialog = useRef<HTMLDialogElement | null>(null),
     contentDialog = useRef<HTMLDialogElement | null>(null),
     promptDialog = useRef<HTMLDialogElement | null>(null),
     submitting = useRef(false);
@@ -82,10 +74,6 @@ function App() {
     [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]),
     [lecture, setLecture] = useState("Untitled lecture"),
     [slideMode, setSlideMode] = useState<SlideMode>("text"),
-    [recording, setRecording] = useState(false),
-    [seconds, setSeconds] = useState(0),
-    [audio, setAudio] = useState<Blob | null>(null),
-    [audioUrl, setAudioUrl] = useState(""),
     [audioFiles, setAudioFiles] = useState<File[]>([]),
     [files, setFiles] = useState<File[]>([]),
     [materials, setMaterials] = useState(""),
@@ -95,7 +83,7 @@ function App() {
     [contentSession, setContentSession] = useState<Lecture | null>(null),
     [editingTitle, setEditingTitle] = useState<string | null>(null),
     [titleDraft, setTitleDraft] = useState(""),
-    [status, setStatus] = useState("Ready to record"),
+    [status, setStatus] = useState("Add lecture audio to begin"),
     [processing, setProcessing] = useState(false),
     [creditAmount, setCreditAmount] = useState("5.00"),
     [notes, setNotes] = useState("");
@@ -139,7 +127,6 @@ function App() {
     });
     return () => {
       data.subscription.unsubscribe();
-      if (timer.current) clearInterval(timer.current);
     };
   }, []);
   useEffect(() => {
@@ -262,33 +249,6 @@ function App() {
       setProcessing(false);
     }
   }
-  async function toggleRecording() {
-    if (recording) return recorder.current?.stop();
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } }),
-        chunks: Blob[] = [],
-        next = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
-      next.ondataavailable = (event) =>
-        event.data.size && chunks.push(event.data);
-      next.onstop = () => {
-        const saved = new Blob(chunks, { type: next.mimeType });
-        setAudio(saved);
-        setAudioUrl(URL.createObjectURL(saved));
-        stream.getTracks().forEach((track) => track.stop());
-        if (timer.current) clearInterval(timer.current);
-        setRecording(false);
-        setStatus("Recording saved locally in this tab");
-      };
-      recorder.current = next;
-      next.start();
-      setSeconds(0);
-      timer.current = setInterval(() => setSeconds((value) => { if (value + 1 >= MAX_AUDIO_SECONDS) { next.stop(); return MAX_AUDIO_SECONDS; } return value + 1; }), 1000);
-      setRecording(true);
-      setStatus("Recording");
-    } catch {
-      setStatus("Microphone access is required to record.");
-    }
-  }
   function queueMaterials(added: File[]) {
     if (!added.length) return;
     setFiles((current) => {
@@ -322,15 +282,11 @@ function App() {
     }
     event.target.value = "";
   }
+  function removeAudio(index: number) {
+    setAudioFiles((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  }
   async function makeNotes() {
     const sources = [
-      ...(audio
-        ? [
-            new File([audio], "recording.webm", {
-              type: audio.type || "audio/webm",
-            }),
-          ]
-        : []),
       ...audioFiles,
       ...files,
       ...(materials.trim()
@@ -371,7 +327,6 @@ function App() {
         await upload(created.id, file);
       }
       await processLecture(created.id, "Starting transcription…");
-      setAudio(null);
       setAudioFiles([]);
       setFiles([]);
       setMaterials("");
@@ -482,7 +437,7 @@ function App() {
     await loadLectures();
   }
   const canProcess = Boolean(
-    audio || audioFiles.length || files.length || materials.trim(),
+    audioFiles.length || files.length || materials.trim(),
   );
   const courseMaterialBytes = files.reduce((total, file) => total + file.size, 0);
   const stage =
@@ -580,24 +535,18 @@ function App() {
         </p>
       </section>
       <section className="workspace" aria-label="Lecture workspace">
-        <article className="recorder card">
+        <article className="audio-card card">
           <div className="card-heading">
             <span>01</span>
             <p>Lecture audio</p>
           </div>
           <div className="card-body">
-            <div className={`record-light ${recording ? "live" : ""}`} />
-            <p className="time">{clock(seconds)}</p>
+            <div className="upload-mark" aria-hidden="true">♫</div>
+            <h2>Upload lecture audio</h2>
+            <p>Choose one or more recordings. We’ll process them in the order shown.</p>
             <p className="status" aria-live="polite">
               {status}
             </p>
-            <button
-              className={recording ? "stop" : "record"}
-              onClick={toggleRecording}
-            >
-              <i />
-              {recording ? "Stop recording" : "Start recording"}
-            </button>
             <label className="audio-upload">
               <input
                 type="file"
@@ -605,18 +554,17 @@ function App() {
                 multiple
                 onChange={addAudio}
               />
-              Choose audio files
+              <span>Choose audio files</span>
             </label>
             {audioFiles.length > 0 && (
-              <small>
-                {audioFiles.length} file{audioFiles.length === 1 ? "" : "s"} ready
-                — uploaded in order as lecture-01, lecture-02, …
-              </small>
-            )}
-            {audioUrl && (
-              <audio controls src={audioUrl}>
-                Your browser cannot play this recording.
-              </audio>
+              <div className="file-queue audio-queue">
+                <div className="file-queue-heading"><strong>{audioFiles.length} audio file{audioFiles.length === 1 ? "" : "s"} ready</strong><button type="button" onClick={() => setAudioFiles([])}>Clear all</button></div>
+                <ul>
+                  {audioFiles.map((file, index) => (
+                    <li key={`${file.name}-${index}`}><span className="file-icon" aria-hidden="true">♫</span><span className="file-details"><strong>{file.name}</strong><small>Lecture {String(index + 1).padStart(2, "0")} · {materialSize(file.size)}</small></span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeAudio(index)}>Remove</button></li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         </article>
@@ -647,11 +595,12 @@ function App() {
               Let AI inspect original slides (visual)
             </label>
             {files.length > 0 && (
-              <div className="queued-materials">
-                <div><small>{materialSize(courseMaterialBytes)} of 5 MB queued</small><button type="button" onClick={() => setFiles([])}>Clear</button></div>
+              <div className="file-queue material-queue">
+                <div className="file-queue-heading"><strong>{files.length} material{files.length === 1 ? "" : "s"} ready</strong><button type="button" onClick={() => setFiles([])}>Clear all</button></div>
+                <small>{materialSize(courseMaterialBytes)} of 5 MB queued</small>
                 <ul>
                   {files.map((file, index) => (
-                    <li key={`${file.name}-${index}`}><span>{file.name}</span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeMaterial(index)}>Remove</button></li>
+                    <li key={`${file.name}-${index}`}><span className="file-icon" aria-hidden="true">▤</span><span className="file-details"><strong>{file.name}</strong><small>{materialSize(file.size)}</small></span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeMaterial(index)}>Remove</button></li>
                   ))}
                 </ul>
               </div>
@@ -712,7 +661,7 @@ function App() {
           <small>
             {canProcess
               ? "Your source material is ready."
-              : "Record audio or add materials to continue."}
+              : "Upload audio or add materials to continue."}
           </small>
         </article>
       </section>
