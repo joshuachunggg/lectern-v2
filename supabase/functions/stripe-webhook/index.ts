@@ -29,6 +29,10 @@ Deno.serve(async request => {
     await admin.from('billing_accounts').upsert({ owner_id: owner, stripe_customer_id: object.customer, stripe_subscription_id: object.subscription });
     await syncSubscription(object.subscription, owner);
   }
+  if (event.type === 'checkout.session.completed' && owner && object.metadata?.purpose === 'overage_credit' && object.payment_status === 'paid' && typeof object.amount_total === 'number') {
+    const { error } = await admin.rpc('record_billing_credit_deposit', { p_owner_id: owner, p_checkout_session_id: object.id, p_amount_cents: object.amount_total });
+    if (error) throw new Error(error.message);
+  }
   if (event.type.startsWith('customer.subscription.')) await syncSubscription(object.id, owner);
   if (event.type === 'invoice.paid' && typeof object.subscription === 'string') {
     await syncSubscription(object.subscription);

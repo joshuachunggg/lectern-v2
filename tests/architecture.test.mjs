@@ -104,14 +104,13 @@ test('billing and source limits are enforced before model work starts', async ()
   const countedFreeLecture = await readFile('supabase/migrations/20260826000018_count_failed_free_lectures.sql', 'utf8');
   const parameterizedFreeLecture = await readFile('supabase/migrations/20260826000019_parameterized_free_lecture_count.sql', 'utf8');
   const claimReturn = await readFile('supabase/migrations/20260827000000_return_after_claim.sql', 'utf8');
-  const overages = await readFile('supabase/migrations/20260827000002_track_monthly_overages.sql', 'utf8');
+  const prepaidCredits = await readFile('supabase/migrations/20260827000004_prepaid_overage_credits.sql', 'utf8');
   assert.match(worker, /claim_lecture_for_owner_v2/);
   assert.match(app, /submitting\.current/);
-  assert.match(worker, /billing\/meter_events/);
-  assert.match(worker, /metered_at/);
-  assert.match(worker, /already exists\.\*identifier/);
   assert.match(billing, /mode: 'subscription'/);
-  assert.match(billing, /overage_used/);
+  assert.match(billing, /credit_checkout/);
+  assert.match(billing, /mode: 'payment'/);
+  assert.match(billing, /credit_cents/);
   assert.match(billing, /stripeSubscription\(account\.stripe_subscription_id\)/);
   assert.match(billing, /returnUrl\.origin !== origin/);
   assert.match(app, /returnUrl: `\$\{window\.location\.origin\}\$\{window\.location\.pathname\}#manage-plan`/);
@@ -125,13 +124,15 @@ test('billing and source limits are enforced before model work starts', async ()
   assert.match(countedFreeLecture, /count\(\*\).*billing_kind = 'free' and status <> 'error'/);
   assert.match(parameterizedFreeLecture, /execute 'select count\(\*\).*owner_id = \$1/);
   assert.match(claimReturn, /return query select 'free'::text, null::text; return;/);
-  assert.match(overages, /add column overage_used integer/);
-  assert.match(overages, /set overage_used = overage_used \+ 1/);
-  assert.match(overages, /ends_at > now\(\)/);
+  assert.match(prepaidCredits, /add column credit_cents integer/);
+  assert.match(prepaidCredits, /billing_credit_deposits/);
+  assert.match(prepaidCredits, /credit_cents = credit_cents - 50/);
+  assert.match(prepaidCredits, /credits < 50/);
+  assert.match(prepaidCredits, /on conflict do nothing/);
   assert.doesNotMatch(worker, /materialObjects/);
 });
 
-test('billing handles cancellations and failed invoices, and the UI separates saved sessions', async () => {
+test('billing handles subscriptions, prepaid deposits, and the UI separates saved sessions', async () => {
   const webhook = await readFile('supabase/functions/stripe-webhook/index.ts', 'utf8');
   const app = await readFile('src.tsx', 'utf8');
   assert.match(webhook, /customer\.subscription\./);
@@ -141,9 +142,11 @@ test('billing handles cancellations and failed invoices, and the UI separates sa
   assert.match(webhook, /items\?\.data\?\.\[0\]\?\.current_period_end/);
   assert.match(app, /#saved-sessions/);
   assert.match(app, /<details className="profile">/);
-  assert.match(app, /included lectures remaining this month/);
-  assert.match(app, /overage lectures used/);
-  assert.match(app, /Manage billing in Stripe/);
+  assert.match(app, /Overage balance/);
+  assert.match(app, /Add overage funds/);
+  assert.match(app, /non-expiring balance/);
+  assert.match(webhook, /overage_credit/);
+  assert.match(webhook, /record_billing_credit_deposit/);
   assert.match(webhook, /overage_used: 0/);
 });
 

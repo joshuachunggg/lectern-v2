@@ -63,7 +63,7 @@ type Lecture = {
   synthesis_prompt: string;
 };
 type SavedPrompt = { id: string; name: string; prompt: string };
-type Billing = { active: boolean; included_used: number; overage_used: number; free_used: boolean };
+type Billing = { active: boolean; included_used: number; overage_used: number; credit_cents: number; free_used: boolean };
 
 function App() {
   const recorder = useRef<MediaRecorder | null>(null),
@@ -170,6 +170,11 @@ function App() {
     const action = billing?.active ? "portal" : "checkout";
     const { data, error } = await supabase.functions.invoke("billing", { body: { action, returnUrl: `${window.location.origin}${window.location.pathname}#manage-plan` } });
     if (error || !data?.url) return setStatus(error?.message ?? "Could not open billing.");
+    window.location.assign(data.url);
+  }
+  async function addOverageFunds() {
+    const { data, error } = await supabase.functions.invoke("billing", { body: { action: "credit_checkout", returnUrl: `${window.location.origin}${window.location.pathname}#manage-plan` } });
+    if (error || !data?.url) return setStatus(error?.message ?? "Could not open checkout.");
     window.location.assign(data.url);
   }
   async function upload(id: string, file: File) {
@@ -535,7 +540,7 @@ function App() {
         <details className="profile">
           <summary><span>{user}</span><small>{billing?.active ? "Paid plan" : "Free plan"}</small></summary>
           <div>
-            <p>{billing?.active ? billing.overage_used ? `${billing.overage_used} overage lectures used` : `${Math.max(0, 24 - billing.included_used)} included lectures remaining this month` : `${billing?.free_used ? 0 : 1} free lecture remaining`}</p>
+            <p>{billing?.active ? `$${((billing.credit_cents ?? 0) / 100).toFixed(2)} overage balance` : `${billing?.free_used ? 0 : 1} free lecture remaining`}</p>
             <a className="sign-out" href="#manage-plan">Manage plan</a>
             <button className="sign-out" onClick={() => supabase.auth.signOut()}>Sign out</button>
           </div>
@@ -545,11 +550,11 @@ function App() {
         <p className="eyebrow">Manage plan</p>
         <h1>{billing?.active ? "Lectern plan" : "Free plan"}</h1>
         {billing?.active ? <>
-          <p>Includes 24 lectures each month, then $0.50 per lecture.</p>
-          <dl><div><dt>Included lectures remaining</dt><dd>{Math.max(0, 24 - billing.included_used)}</dd></div><div><dt>Overage lectures used</dt><dd>{billing.overage_used}</dd></div><div><dt>Overage cost this month</dt><dd>${(billing.overage_used * 0.5).toFixed(2)}</dd></div></dl>
-          <button onClick={openStripeBilling}>Manage billing in Stripe</button>
+          <p>Includes 24 lectures each month. Overage lectures are $0.50 and use your non-expiring balance.</p>
+          <dl><div><dt>Included lectures remaining</dt><dd>{Math.max(0, 24 - billing.included_used)}</dd></div><div><dt>Overage balance</dt><dd>${(billing.credit_cents / 100).toFixed(2)}</dd></div></dl>
+          <button onClick={addOverageFunds}>Add overage funds</button><button onClick={openStripeBilling}>Manage subscription in Stripe</button>
         </> : <>
-          <p>Your first lecture is free. The Lectern plan is $10/month and includes 24 lectures, then $0.50 per lecture.</p>
+          <p>Your first lecture is free. The Lectern plan is $10/month and includes 24 lectures. Overage lectures cost $0.50 from a prepaid balance.</p>
           <button onClick={openStripeBilling}>Subscribe in Stripe</button>
         </>}
       </section>}

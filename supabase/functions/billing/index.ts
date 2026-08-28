@@ -29,7 +29,7 @@ Deno.serve(async request => {
         account = { ...account, subscription_status: subscription.status, period_end: end ? new Date(end * 1000).toISOString() : null };
         await admin.from('billing_accounts').update({ subscription_status: account.subscription_status, period_end: account.period_end, updated_at: new Date().toISOString() }).eq('owner_id', user.id);
       }
-      return Response.json({ active: ['active', 'trialing'].includes(account?.subscription_status ?? ''), included_used: account?.included_used ?? 0, overage_used: account?.overage_used ?? 0, free_used: account?.free_used ?? false }, { headers: cors });
+      return Response.json({ active: ['active', 'trialing'].includes(account?.subscription_status ?? ''), included_used: account?.included_used ?? 0, overage_used: account?.overage_used ?? 0, credit_cents: account?.credit_cents ?? 0, free_used: account?.free_used ?? false }, { headers: cors });
     }
     let customer = account?.stripe_customer_id;
     if (!customer) {
@@ -43,9 +43,14 @@ Deno.serve(async request => {
       const session = await stripe('/billing_portal/sessions', new URLSearchParams({ customer, return_url: returnUrl.href }));
       return Response.json({ url: session.url }, { headers: cors });
     }
+    if (action === 'credit_checkout') {
+      if (!['active', 'trialing'].includes(account?.subscription_status ?? '')) throw new Error('An active subscription is required to add overage funds.');
+      const session = await stripe('/checkout/sessions', new URLSearchParams({ mode: 'payment', customer, success_url: `${returnUrl.href}?billing=credit-added`, cancel_url: `${returnUrl.href}?billing=cancelled`, 'line_items[0][price_data][currency]': 'usd', 'line_items[0][price_data][product_data][name]': 'Lectern overage balance', 'line_items[0][price_data][unit_amount]': '500', 'line_items[0][quantity]': '1', 'line_items[0][adjustable_quantity][enabled]': 'true', 'line_items[0][adjustable_quantity][minimum]': '1', 'line_items[0][adjustable_quantity][maximum]': '20', 'metadata[owner_id]': user.id, 'metadata[purpose]': 'overage_credit' }));
+      return Response.json({ url: session.url }, { headers: cors });
+    }
     if (action !== 'checkout') throw new Error('Invalid billing action.');
     if (['active', 'trialing'].includes(account?.subscription_status ?? '')) throw new Error('Your subscription is already active.');
-    const session = await stripe('/checkout/sessions', new URLSearchParams({ mode: 'subscription', customer, success_url: `${returnUrl.href}?billing=success`, cancel_url: `${returnUrl.href}?billing=cancelled`, 'line_items[0][price]': Deno.env.get('STRIPE_BASE_PRICE_ID')!, 'line_items[0][quantity]': '1', 'line_items[1][price]': Deno.env.get('STRIPE_OVERAGE_PRICE_ID')!, 'metadata[owner_id]': user.id, 'subscription_data[metadata][owner_id]': user.id }));
+    const session = await stripe('/checkout/sessions', new URLSearchParams({ mode: 'subscription', customer, success_url: `${returnUrl.href}?billing=success`, cancel_url: `${returnUrl.href}?billing=cancelled`, 'line_items[0][price]': Deno.env.get('STRIPE_BASE_PRICE_ID')!, 'line_items[0][quantity]': '1', 'metadata[owner_id]': user.id, 'subscription_data[metadata][owner_id]': user.id }));
     return Response.json({ url: session.url }, { headers: cors });
   } catch (error) {
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Billing failed.' }), { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });
