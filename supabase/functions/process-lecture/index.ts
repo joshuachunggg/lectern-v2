@@ -76,5 +76,5 @@ Deno.serve(async request => {
     if (!notes) throw new Error(`Note synthesis returned no text${result.incomplete_details?.reason ? ` (${result.incomplete_details.reason})` : ''}.`);
     await admin.from('lectures').update({ status: 'done', status_message: 'Study notes are ready.', notes, api_usage: { transcription: transcriptionUsage, notes: result.usage ?? {} }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id);
     return Response.json({ status: 'done' }, { headers: corsHeaders });
-  } catch (error) { const message = error instanceof Error ? error.message : 'Processing failed.'; await admin.from('lectures').update({ status: 'error', status_message: message }).eq('id', lecture_id); return fail(message); }
+  } catch (error) { const message = error instanceof Error ? error.message : 'Processing failed.'; if (!synthesize_only) await admin.rpc('release_lecture_reservation', { p_lecture_id: lecture_id, p_owner_id: user.id }); await admin.from('lectures').update({ status: 'error', status_message: message }).eq('id', lecture_id); return fail(message); }
 });

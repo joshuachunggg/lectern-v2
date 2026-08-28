@@ -21,7 +21,8 @@ Deno.serve(async request => {
   const event = JSON.parse(payload), object = event.data.object, admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   const syncSubscription = async (id: string, owner?: string) => {
     const subscription = await stripeSubscription(id), end = subscription.current_period_end ?? subscription.items?.data?.[0]?.current_period_end;
-    const query = admin.from('billing_accounts').update({ stripe_subscription_id: subscription.id, subscription_status: subscription.status, period_end: end ? new Date(end * 1000).toISOString() : null, updated_at: new Date().toISOString() });
+    const cancelAt = subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toISOString() : subscription.cancel_at_period_end && end ? new Date(end * 1000).toISOString() : null;
+    const query = admin.from('billing_accounts').update({ stripe_subscription_id: subscription.id, subscription_status: subscription.status, period_end: end ? new Date(end * 1000).toISOString() : null, cancel_at: cancelAt, updated_at: new Date().toISOString() });
     if (owner) await query.eq('owner_id', owner); else await query.eq('stripe_customer_id', object.customer);
   }
   const owner = object.metadata?.owner_id;
@@ -36,9 +37,12 @@ Deno.serve(async request => {
   if (event.type.startsWith('customer.subscription.')) await syncSubscription(object.id, owner);
   if (event.type === 'invoice.paid' && typeof object.subscription === 'string') {
     await syncSubscription(object.subscription);
-    const account = admin.from('billing_accounts').update({ included_seconds: 0, updated_at: new Date().toISOString() }).eq('stripe_customer_id', object.customer).eq('stripe_subscription_id', object.subscription);
-    await account;
-    await admin.from('billing_accounts').update({ overage_seconds: 0 }).eq('stripe_customer_id', object.customer).eq('stripe_subscription_id', object.subscription);
+    const line = object.lines?.data?.find((item: { subscription?: string }) => item.subscription === object.subscription) ?? object.lines?.data?.[0];
+    const periodEnd = line?.period?.end ?? object.period_end;
+    if (typeof periodEnd === 'number') {
+      const { error } = await admin.rpc('apply_paid_invoice', { p_customer_id: object.customer, p_subscription_id: object.subscription, p_period_end: new Date(periodEnd * 1000).toISOString() });
+      if (error) throw new Error(error.message);
+    }
   }
   if (event.type === 'invoice.payment_failed') await admin.from('billing_accounts').update({ subscription_status: 'past_due', updated_at: new Date().toISOString() }).eq('stripe_customer_id', object.customer);
   return new Response('ok');

@@ -61,7 +61,7 @@ type Lecture = {
   synthesis_prompt: string;
 };
 type SavedPrompt = { id: string; name: string; prompt: string };
-type Billing = { active: boolean; included_seconds: number; overage_seconds: number; credit_cents: number; free_used: boolean };
+type Billing = { active: boolean; included_seconds: number; overage_seconds: number; credit_cents: number; free_used: boolean; cancel_at: string | null };
 
 function App() {
   const marketingAppUrl = import.meta.env.VITE_APP_URL as string | undefined;
@@ -615,6 +615,7 @@ function App() {
         <h1>{billing?.active ? "Lectern plan" : "Free plan"}</h1>
         {billing?.active ? <>
           <p>Includes 30 audio hours each month. Overage audio is $0.50 per hour and uses your non-expiring balance.</p>
+          {billing.cancel_at && <p className="cancel-notice">Your plan cancels on {new Date(billing.cancel_at).toLocaleDateString()}.</p>}
           {overageNotice && <p className="overage-notice" role="status">{overageNotice}</p>}
           <dl><div><dt>Included audio remaining</dt><dd>{Math.max(0, 30 - billing.included_seconds / 3600).toFixed(1)} hr</dd></div><div><dt>Overage balance</dt><dd>${(billing.credit_cents / 100).toFixed(2)}</dd></div></dl>
           <div className="refill">

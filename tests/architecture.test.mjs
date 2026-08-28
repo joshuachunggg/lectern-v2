@@ -106,6 +106,7 @@ test('billing and source limits are enforced before model work starts', async ()
   const claimReturn = await readFile('supabase/migrations/20260827000000_return_after_claim.sql', 'utf8');
   const prepaidCredits = await readFile('supabase/migrations/20260827000004_prepaid_overage_credits.sql', 'utf8');
   const timeBilling = await readFile('supabase/migrations/20260828000000_time_based_billing.sql', 'utf8');
+  const hardenedBilling = await readFile('supabase/migrations/20260828000001_harden_subscription_billing.sql', 'utf8');
   assert.match(worker, /claim_lecture_for_owner_v2/);
   assert.match(app, /submitting\.current/);
   assert.match(billing, /mode: 'subscription'/);
@@ -137,6 +138,11 @@ test('billing and source limits are enforced before model work starts', async ()
   assert.match(timeBilling, /settle_lecture_time/);
   assert.match(timeBilling, /108000/);
   assert.match(worker, /settle_lecture_time/);
+  assert.match(worker, /release_lecture_reservation/);
+  assert.match(hardenedBilling, /last_paid_period_end/);
+  assert.match(hardenedBilling, /apply_paid_invoice/);
+  assert.match(hardenedBilling, /release_lecture_reservation/);
+  assert.match(hardenedBilling, /Service role required/);
   assert.doesNotMatch(worker, /materialObjects/);
 });
 
@@ -155,7 +161,9 @@ test('billing handles subscriptions, prepaid deposits, and the UI separates save
   assert.match(app, /non-expiring balance/);
   assert.match(webhook, /overage_credit/);
   assert.match(webhook, /record_billing_credit_deposit/);
-  assert.match(webhook, /overage_seconds: 0/);
+  assert.match(webhook, /apply_paid_invoice/);
+  assert.match(app, /cancel_at/);
+  assert.match(await readFile('supabase/migrations/20260828000001_harden_subscription_billing.sql', 'utf8'), /overage_seconds = 0/);
 });
 
 test('recorded and uploaded audio is capped at a lecture length and prepared for transcription', async () => {
