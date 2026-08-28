@@ -110,7 +110,7 @@ header nav a.active {
 .profile[open] > div { animation: reveal 180ms ease-out both; transform-origin: top right; }
 .profile p { margin: 0 0 12px; color: #526061; font-size: 13px; line-height: 1.4; }
 .profile .sign-out { display: block; margin-top: 9px; }
-.profile a.sign-out { color: var(--ink); font-size: 13px; }
+.profile a.sign-out { color: var(--ink); }
 .profile .upgrade-plan { width: 100%; margin: 0 0 3px; padding: 8px 10px; font-size: 12px; }
 .brand {
   color: var(--ink);
