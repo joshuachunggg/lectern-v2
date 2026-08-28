@@ -525,13 +525,13 @@ function App() {
         </header>
         <section className="landing-hero" id="top">
           <p className="eyebrow">A calmer way to learn</p>
-          <h1>Keep your attention where it belongs.</h1>
-          <p>Lectern turns lecture audio and course material into clear, considered notes—so you can stay present in the room.</p>
+          <h1>Never choose between listening and taking notes.</h1>
+          <p>Lectern captures your lecture and turns it into clear, organized study notes—so you can stay present and know the important parts are there when you need them.</p>
           <button onClick={() => setShowAuth(true)}>Create a free account</button>
           <small>Your first lecture is free. No card required.</small>
         </section>
         <section className="landing-section">
-          <div className="landing-section-heading"><p className="eyebrow">How it works</p><h2>Bring the lecture. Leave with the thread.</h2></div>
+          <div className="landing-section-heading"><p className="eyebrow">How it works</p><h2>Stay present. Nothing gets lost.</h2></div>
           <ol className="landing-steps">
             <li><strong>Record or upload</strong><span>Add one recording, or capture the lecture as it happens.</span></li>
             <li><strong>Set the context</strong><span>Include course materials and the note format that helps you study.</span></li>
