@@ -524,11 +524,21 @@ function App() {
           <button className="landing-sign-in" onClick={() => setShowAuth(true)}>Sign in</button>
         </header>
         <section className="landing-hero" id="top">
-          <p className="eyebrow">A calmer way to learn</p>
-          <h1>Never choose between listening and taking notes.</h1>
-          <p>Lectern captures your lecture and turns it into clear, organized study notes—so you can stay present and know the important parts are there when you need them.</p>
-          <button onClick={() => setShowAuth(true)}>Create a free account</button>
-          <small>Your first lecture is free. No card required.</small>
+          <div className="landing-hero-copy">
+            <p className="eyebrow">A calmer way to learn</p>
+            <h1>Never choose between listening and taking notes.</h1>
+            <p>Lectern captures your lecture and turns it into clear, organized study notes—so you can stay present and know the important parts are there when you need them.</p>
+            <button onClick={() => setShowAuth(true)}>Create a free account</button>
+            <small>Your first lecture is free. No card required.</small>
+          </div>
+          <aside className="hero-preview" aria-label="Example of finished study notes">
+            <div className="hero-preview-inner">
+              <div className="preview-bar"><span>Lecture 04</span><span className="preview-dot" /></div>
+              <p className="preview-title">Study notes, ready when you are.</p>
+              <div className="preview-line accent" /><div className="preview-line" /><div className="preview-line short" />
+              <div className="preview-tags"><span>Key concepts</span><span>Review</span></div>
+            </div>
+          </aside>
         </section>
         <section className="landing-section">
           <div className="landing-section-heading"><p className="eyebrow">How it works</p><h2>Stay present. Nothing gets lost.</h2></div>
