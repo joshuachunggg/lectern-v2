@@ -120,6 +120,29 @@ header nav a.active {
   text-decoration: none;
   letter-spacing: -0.06em;
 }
+.landing { padding-top: 24px; }
+.landing-header { padding-bottom: 18px; }
+.landing-sign-in, .auth-back { border: 1px solid var(--line); background: var(--card); color: var(--ink); box-shadow: none; }
+.landing-hero { max-width: 790px; padding: 112px 0 98px; animation: rise 420ms 80ms both; }
+.landing-hero h1, .landing-section h2, .landing-plan h2 { margin: 8px 0 18px; font-family: Georgia, serif; letter-spacing: -0.06em; }
+.landing-hero h1 { font-size: clamp(54px, 8vw, 94px); line-height: .95; }
+.landing-hero > p:not(.eyebrow) { max-width: 590px; color: #526061; font-size: 19px; line-height: 1.55; }
+.landing-hero button { margin: 12px 12px 0 0; }
+.landing-hero small { display: inline-block; }
+.landing-section { display: grid; grid-template-columns: .8fr 1.2fr; gap: 46px; padding: 56px 0; border-top: 1px solid var(--line); }
+.landing-section h2 { font-size: clamp(34px, 4vw, 48px); line-height: 1; }
+.landing-steps { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.landing-steps li { padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: rgb(255 253 247 / .6); }
+.landing-steps strong, .landing-steps span { display: block; }
+.landing-steps span { margin-top: 5px; color: #526061; }
+.landing-plan { margin: 40px 0 24px; padding: 42px; border: 1px solid var(--ink); border-radius: 20px; background: #e9e3d6; }
+.landing-plan h2 { font-size: clamp(42px, 5vw, 62px); line-height: .95; }
+.landing-plan > div > p:last-child { max-width: 460px; color: #526061; font-size: 17px; }
+.landing-plan dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 32px 0 16px; }
+.landing-plan dl div { padding: 16px; border: 1px solid #cfc7b8; border-radius: 12px; background: rgb(255 253 247 / .55); }
+.landing-plan dt { color: #526061; font-size: 12px; }
+.landing-plan dd { margin: 5px 0 0; font-size: 17px; font-weight: bold; }
+.landing-overage { margin: 0 0 20px; color: #526061; font-size: 14px; }
 .privacy,
 footer,
 small {
@@ -144,6 +167,7 @@ small {
 .plan dl div { padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
 .plan dt { color: #526061; font-size: 12px; }
 .plan dd { margin: 5px 0 0; font-size: 21px; font-weight: bold; }
+.overage-notice { padding: 12px 14px; border: 1px solid #e7b7a5; border-radius: 10px; background: #fff5f0; color: #8d321f; }
 .refill { display: flex; align-items: center; gap: 10px; margin-top: 20px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fffefa; }
 .refill > div { flex: 1; }
 .refill strong, .refill small { display: block; }
@@ -801,6 +825,7 @@ footer {
   max-width: 520px;
   padding-top: 12vh;
 }
+.auth-back { padding: 0; border: 0; cursor: pointer; }
 .auth section {
   margin-top: 56px;
   padding: 34px;
@@ -839,6 +864,12 @@ footer {
 .auth-error {
   color: #a22;
   font-size: 13px;
+}
+@media (max-width: 720px) {
+  .landing-hero { padding: 76px 0 70px; }
+  .landing-section { grid-template-columns: 1fr; gap: 22px; padding: 42px 0; }
+  .landing-plan { margin-top: 24px; padding: 28px; }
+  .landing-plan dl { grid-template-columns: 1fr; }
 }
 .sign-out {
   border: 0;

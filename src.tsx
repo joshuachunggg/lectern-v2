@@ -75,6 +75,7 @@ function App() {
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [authError, setAuthError] = useState(""),
+    [showAuth, setShowAuth] = useState(false),
     [page, setPage] = useState(() => window.location.hash === "#saved-sessions" ? "saved" : window.location.hash === "#manage-plan" ? "plan" : "new"),
     [billing, setBilling] = useState<Billing | null>(null),
     [lectures, setLectures] = useState<Lecture[]>([]),
@@ -98,6 +99,7 @@ function App() {
     [status, setStatus] = useState("Add lecture audio to begin"),
     [processing, setProcessing] = useState(false),
     [creditAmount, setCreditAmount] = useState("5.00"),
+    [overageNotice, setOverageNotice] = useState(""),
     [notes, setNotes] = useState(""),
     [transcript, setTranscript] = useState(""),
     [showTranscript, setShowTranscript] = useState(false);
@@ -117,7 +119,10 @@ function App() {
   };
   const loadBilling = async () => {
     const { data } = await supabase.functions.invoke("billing", { body: { action: "status" } });
-    if (data) setBilling(data as Billing);
+    if (!data) return null;
+    const next = data as Billing;
+    setBilling(next);
+    return next;
   };
 
   useEffect(() => {
@@ -343,10 +348,20 @@ function App() {
     if (!sources.length) return;
     if (files.reduce((total, file) => total + file.size, 0) > MAX_COURSE_MATERIAL_BYTES)
       return setStatus("Course materials can total at most 5 MB.");
-    if ((await Promise.all(sources.filter(isAudio).map(audioDuration))).reduce((total, seconds) => total + seconds, 0) > MAX_AUDIO_SECONDS)
+    const audioSeconds = (await Promise.all(sources.filter(isAudio).map(audioDuration))).reduce((total, seconds) => total + seconds, 0);
+    if (audioSeconds > MAX_AUDIO_SECONDS)
       return setStatus("A lecture can contain at most 90 minutes of audio.");
     if (notePrompt.length > MAX_PROMPT_CHARS)
       return setStatus("Custom note preferences are limited to 1,500 characters.");
+    const currentBilling = billing ?? await loadBilling();
+    const includedSeconds = Math.max(0, 108000 - (currentBilling?.included_seconds ?? 0));
+    const requiredCreditCents = Math.ceil(Math.max(0, MAX_AUDIO_SECONDS - Math.min(MAX_AUDIO_SECONDS, includedSeconds)) * 50 / 3600);
+    if (currentBilling?.active && audioSeconds > includedSeconds && currentBilling.credit_cents < requiredCreditCents) {
+      setCreditAmount((requiredCreditCents / 100).toFixed(2));
+      setOverageNotice(`This lecture may use overage. Add at least $${(requiredCreditCents / 100).toFixed(2)} in credit before starting; unused credit stays on your balance.`);
+      window.location.hash = "#manage-plan";
+      return;
+    }
     if (submitting.current) return;
     submitting.current = true;
     setProcessing(true);
@@ -501,12 +516,42 @@ function App() {
             ? 5
             : 0;
 
+  if (!user && !showAuth)
+    return (
+      <main className="landing">
+        <header className="landing-header">
+          <a className="brand" href="#top">lectern</a>
+          <button className="landing-sign-in" onClick={() => setShowAuth(true)}>Sign in</button>
+        </header>
+        <section className="landing-hero" id="top">
+          <p className="eyebrow">A calmer way to learn</p>
+          <h1>Keep your attention where it belongs.</h1>
+          <p>Lectern turns lecture audio and course material into clear, considered notes—so you can stay present in the room.</p>
+          <button onClick={() => setShowAuth(true)}>Create a free account</button>
+          <small>Your first lecture is free. No card required.</small>
+        </section>
+        <section className="landing-section">
+          <div className="landing-section-heading"><p className="eyebrow">How it works</p><h2>Bring the lecture. Leave with the thread.</h2></div>
+          <ol className="landing-steps">
+            <li><strong>Record or upload</strong><span>Add one recording, or capture the lecture as it happens.</span></li>
+            <li><strong>Set the context</strong><span>Include course materials and the note format that helps you study.</span></li>
+            <li><strong>Study with clarity</strong><span>Receive a transcript and structured notes built around the lecture.</span></li>
+          </ol>
+        </section>
+        <section className="landing-plan">
+          <div><p className="eyebrow">One honest plan</p><h2>$10 / month</h2><p>30 audio hours each month—about 24 seventy-five-minute lectures.</p></div>
+          <dl><div><dt>Included time</dt><dd>30 hours</dd></div><div><dt>After that</dt><dd>$0.50 / hour</dd></div><div><dt>Always included</dt><dd>Transcripts, notes, and custom instructions</dd></div></dl>
+          <p className="landing-overage">Overage is prepaid only when you need it. Any unused balance remains yours.</p>
+          <button onClick={() => setShowAuth(true)}>Start with a free lecture</button>
+        </section>
+      </main>
+    );
   if (!user)
     return (
       <main className="auth">
-        <a className="brand" href="/">
+        <button className="brand auth-back" onClick={() => setShowAuth(false)}>
           lectern
-        </a>
+        </button>
         <section>
           <p className="eyebrow">Your lecture workspace</p>
           <h1>Sign in</h1>
@@ -558,6 +603,7 @@ function App() {
         <h1>{billing?.active ? "Lectern plan" : "Free plan"}</h1>
         {billing?.active ? <>
           <p>Includes 30 audio hours each month. Overage audio is $0.50 per hour and uses your non-expiring balance.</p>
+          {overageNotice && <p className="overage-notice" role="status">{overageNotice}</p>}
           <dl><div><dt>Included audio remaining</dt><dd>{Math.max(0, 30 - billing.included_seconds / 3600).toFixed(1)} hr</dd></div><div><dt>Overage balance</dt><dd>${(billing.credit_cents / 100).toFixed(2)}</dd></div></dl>
           <div className="refill">
             <div><strong>Add overage funds</strong><small>Any amount from $0.50 to $100.</small></div>

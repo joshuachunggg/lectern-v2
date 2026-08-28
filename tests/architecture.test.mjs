@@ -184,6 +184,16 @@ test('free users can compare plans and view finished transcripts', async () => {
   assert.match(app, /select\("notes,status_message,transcript"\)/);
 });
 
+test('paid users are sent to preload overage before a lecture can exceed included time', async () => {
+  const app = await readFile('src.tsx', 'utf8');
+  assert.match(app, /const requiredCreditCents = Math\.ceil/);
+  assert.match(app, /audioSeconds > includedSeconds && currentBilling\.credit_cents < requiredCreditCents/);
+  assert.match(app, /window\.location\.hash = "#manage-plan"/);
+  assert.match(app, /This lecture may use overage/);
+  assert.match(app, /30 audio hours each month—about 24 seventy-five-minute lectures/);
+  assert.match(app, /Transcripts, notes, and custom instructions/);
+});
+
 test('course materials can be selected before processing', async () => {
   const app = await readFile('src.tsx', 'utf8');
   const style = await readFile('style.css', 'utf8');
