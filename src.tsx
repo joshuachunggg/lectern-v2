@@ -64,6 +64,7 @@ type SavedPrompt = { id: string; name: string; prompt: string };
 type Billing = { active: boolean; included_seconds: number; overage_seconds: number; credit_cents: number; free_used: boolean };
 
 function App() {
+  const marketingAppUrl = import.meta.env.VITE_APP_URL as string | undefined;
   const recorder = useRef<MediaRecorder | null>(null),
     timer = useRef<ReturnType<typeof setInterval> | null>(null),
     notesDialog = useRef<HTMLDialogElement | null>(null),
@@ -515,20 +516,21 @@ function App() {
           : status === "Study notes are ready."
             ? 5
             : 0;
+  const openApp = () => marketingAppUrl ? window.location.assign(marketingAppUrl) : setShowAuth(true);
 
   if (!user && !showAuth)
     return (
       <main className="landing">
         <header className="landing-header">
           <a className="brand" href="#top">lectern</a>
-          <button className="landing-sign-in" onClick={() => setShowAuth(true)}>Sign in</button>
+          <button className="landing-sign-in" onClick={openApp}>Sign in</button>
         </header>
         <section className="landing-hero" id="top">
           <div className="landing-hero-copy">
             <p className="eyebrow">A calmer way to learn</p>
             <h1>Never choose between listening and taking notes.</h1>
             <p>Lectern captures your lecture and turns it into clear, organized study notes—so you can stay present and know the important parts are there when you need them.</p>
-            <button onClick={() => setShowAuth(true)}>Create a free account</button>
+            <button onClick={openApp}>Create a free account</button>
             <small>Your first lecture is free. No card required.</small>
           </div>
           <aside className="hero-preview" aria-label="Example of finished study notes">
@@ -552,7 +554,7 @@ function App() {
           <div><p className="eyebrow">One honest plan</p><h2>$10 / month</h2><p>30 audio hours each month—about 24 seventy-five-minute lectures.</p></div>
           <dl><div><dt>Included time</dt><dd>30 hours</dd></div><div><dt>After that</dt><dd>$0.50 / hour</dd></div><div><dt>Always included</dt><dd>Transcripts, notes, and custom instructions</dd></div></dl>
           <p className="landing-overage">Overage is prepaid only when you need it. Any unused balance remains yours.</p>
-          <button onClick={() => setShowAuth(true)}>Start with a free lecture</button>
+          <button onClick={openApp}>Start with a free lecture</button>
         </section>
       </main>
     );
