@@ -25,6 +25,8 @@ const audioDuration = (file: File) => new Promise<number>((resolve, reject) => {
   audio.src = url;
 });
 const isAudio = (file: File) => AUDIO_EXTENSIONS.has(file.name.toLowerCase().split(".").pop() ?? "");
+const isMaterial = (file: File) => ["pdf", "txt"].includes(file.name.toLowerCase().split(".").pop() ?? "");
+const isPowerPoint = (file: File) => ["ppt", "pptx"].includes(file.name.toLowerCase().split(".").pop() ?? "");
 const wavHeader = (samples: number) => {
   const bytes = new ArrayBuffer(44), view = new DataView(bytes);
   view.setUint32(0, 0x52494646, false); view.setUint32(4, 36 + samples * 2, true); view.setUint32(8, 0x57415645, false); view.setUint32(12, 0x666d7420, false); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, 16000, true); view.setUint32(28, 32000, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); view.setUint32(36, 0x64617461, false); view.setUint32(40, samples * 2, true);
@@ -250,14 +252,15 @@ function App() {
     }
   }
   function queueMaterials(added: File[]) {
-    if (!added.length) return;
+    const accepted = added.filter(isMaterial), rejected = added.filter((file) => !isMaterial(file));
+    if (!accepted.length) return setStatus(rejected.some(isPowerPoint) ? "PowerPoint files aren’t supported. Export them as PDFs before uploading." : "Upload a PDF or plain-text file.");
     setFiles((current) => {
-      const next = [...current, ...added];
+      const next = [...current, ...accepted];
       if (next.reduce((total, file) => total + file.size, 0) > MAX_COURSE_MATERIAL_BYTES) {
         setStatus("Course materials can total at most 5 MB.");
         return current;
       }
-      setStatus(`${added.length} course material${added.length === 1 ? "" : "s"} ready — uploaded when you make study notes.`);
+      setStatus(`${accepted.length} course material${accepted.length === 1 ? "" : "s"} ready${rejected.length ? " — export PowerPoint files as PDFs before uploading." : ""}`);
       return next;
     });
   }
@@ -344,11 +347,11 @@ function App() {
     if (!contentSession) return;
     const form = event.currentTarget,
       data = new FormData(form),
-      added = [
-        ...Array.from(data.getAll("audio")).filter((file): file is File => file instanceof File && file.size > 0),
-        ...Array.from(data.getAll("materials")).filter((file): file is File => file instanceof File && file.size > 0),
-      ],
+      audioFiles = Array.from(data.getAll("audio")).filter((file): file is File => file instanceof File && file.size > 0),
+      materialFiles = Array.from(data.getAll("materials")).filter((file): file is File => file instanceof File && file.size > 0),
+      added = [...audioFiles, ...materialFiles],
       transcript = String(data.get("transcript") ?? "").trim();
+    if (materialFiles.some((file) => !isMaterial(file))) return setStatus(materialFiles.some(isPowerPoint) ? "PowerPoint files aren’t supported. Export them as PDFs before uploading." : "Upload a PDF or plain-text file.");
     if (transcript)
       added.push(
         new File([transcript], "pasted-transcript.txt", { type: "text/plain" }),
@@ -577,12 +580,13 @@ function App() {
             <label className="dropzone" onDragOver={(event) => event.preventDefault()} onDrop={dropFiles}>
               <input
                 type="file"
-                accept=".pdf,.pptx,.txt"
+                accept=".pdf,.txt"
                 multiple
                 onChange={addFiles}
               />
-              <strong>Drop or choose slides</strong>
-              <small>PDF, PowerPoint (.pptx), or plain text</small>
+              <strong>Drop or choose a file</strong>
+              <small>PDF or plain text</small>
+              <small>PowerPoint? Export it as a PDF first.</small>
             </label>
             <label className="materials-label">
               <input
@@ -596,8 +600,7 @@ function App() {
             </label>
             {files.length > 0 && (
               <div className="file-queue material-queue">
-                <div className="file-queue-heading"><strong>{files.length} material{files.length === 1 ? "" : "s"} ready</strong><button type="button" onClick={() => setFiles([])}>Clear all</button></div>
-                <small>{materialSize(courseMaterialBytes)} of 5 MB queued</small>
+                <strong>Course files</strong>
                 <ul>
                   {files.map((file, index) => (
                     <li key={`${file.name}-${index}`}><span className="file-icon" aria-hidden="true">▤</span><span className="file-details"><strong>{file.name}</strong><small>{materialSize(file.size)}</small></span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeMaterial(index)}>Remove</button></li>
@@ -757,7 +760,7 @@ function App() {
           </label>
           <label>
             Slides or materials
-            <input name="materials" type="file" accept=".pdf,.ppt,.pptx,.txt" multiple />
+            <input name="materials" type="file" accept=".pdf,.txt" multiple />
           </label>
           <label>
             Or paste a transcript

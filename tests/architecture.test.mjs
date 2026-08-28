@@ -172,6 +172,8 @@ test('course materials can be selected or dropped before processing', async () =
   const style = await readFile('style.css', 'utf8');
   assert.match(app, /function queueMaterials/);
   assert.match(app, /function removeMaterial/);
+  assert.match(app, /PowerPoint files aren’t supported\. Export them as PDFs before uploading\./);
+  assert.match(app, /accept="\.pdf,\.txt"/);
   assert.match(app, /onDrop=\{dropFiles\}/);
   assert.match(app, /Course materials can total at most 5 MB/);
   assert.match(app, /status === "Study notes are ready\."/);

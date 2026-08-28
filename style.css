@@ -285,6 +285,7 @@ button:disabled {
 .dropzone small {
   margin-top: 7px;
 }
+.dropzone small + small { margin-top: 2px; color: #8a5b4c; }
 .file-queue { margin-top: 14px; }
 .file-queue-heading,
 .file-queue li {
@@ -294,6 +295,7 @@ button:disabled {
   gap: 8px;
 }
 .file-queue-heading strong { font-size: 13px; }
+.material-queue > strong { display: block; font-size: 13px; }
 .file-queue > small { display: block; margin-top: 2px; }
 .file-queue ul { display: grid; gap: 7px; max-height: 136px; margin: 9px 0 0; padding: 0; overflow: auto; list-style: none; }
 .file-queue li { padding: 9px; border: 1px solid #ead8d0; border-radius: 10px; background: #fffaf7; }
