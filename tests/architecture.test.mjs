@@ -167,14 +167,14 @@ test('uploaded audio is capped at a lecture length and prepared for transcriptio
   assert.match(app, /at most 90 minutes of audio/);
 });
 
-test('course materials can be selected or dropped before processing', async () => {
+test('course materials can be selected before processing', async () => {
   const app = await readFile('src.tsx', 'utf8');
   const style = await readFile('style.css', 'utf8');
   assert.match(app, /function queueMaterials/);
   assert.match(app, /function removeMaterial/);
   assert.match(app, /PowerPoint files aren’t supported\. Export them as PDFs before uploading\./);
   assert.match(app, /accept="\.pdf,\.txt"/);
-  assert.match(app, /onDrop=\{dropFiles\}/);
+  assert.doesNotMatch(app, /dropFiles|onDrop=/);
   assert.match(app, /Course materials can total at most 5 MB/);
   assert.match(app, /status === "Study notes are ready\."/);
   assert.match(style, /\.file-queue ul \{ display: grid; gap: 7px; max-height: 136px;/);

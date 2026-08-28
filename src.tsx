@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { ChangeEvent, DragEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -267,10 +267,6 @@ function App() {
   function addFiles(event: ChangeEvent<HTMLInputElement>) {
     queueMaterials(Array.from(event.target.files ?? []));
     event.target.value = "";
-  }
-  function dropFiles(event: DragEvent<HTMLLabelElement>) {
-    event.preventDefault();
-    queueMaterials(Array.from(event.dataTransfer.files));
   }
   function removeMaterial(index: number) {
     setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index));
@@ -577,17 +573,16 @@ function App() {
             <p>Course materials</p>
           </div>
           <div className="card-body">
-            <label className="dropzone" onDragOver={(event) => event.preventDefault()} onDrop={dropFiles}>
+            <label className="material-upload">
               <input
                 type="file"
                 accept=".pdf,.txt"
                 multiple
                 onChange={addFiles}
               />
-              <strong>Drop or choose a file</strong>
-              <small>PDF or plain text</small>
-              <small>PowerPoint? Export it as a PDF first.</small>
+              <span>Choose course file</span>
             </label>
+            <small className="upload-hint">PDF or plain text. Export PowerPoint files as PDFs first.</small>
             <label className="materials-label">
               <input
                 type="checkbox"

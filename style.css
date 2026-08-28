@@ -264,28 +264,18 @@ button:disabled {
   cursor: not-allowed;
   opacity: 0.35;
 }
-.dropzone {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  min-height: 130px;
+.material-upload {
+  display: inline-flex;
+  width: fit-content;
   margin-top: 30px;
-  border: 1px dashed #9ca6a3;
-  border-radius: 8px;
-  background: #fffefa;
-  color: var(--ink);
   cursor: pointer;
-  text-align: center;
 }
-.dropzone:hover { border-color: var(--orange); background: #fffaf6; }
-.dropzone input {
+.material-upload input {
   display: none;
 }
-.dropzone small {
-  margin-top: 7px;
-}
-.dropzone small + small { margin-top: 2px; color: #8a5b4c; }
+.material-upload span { padding: 12px 17px; border: 1px solid var(--orange-dark); border-radius: 999px; background: linear-gradient(135deg, #ee7951, var(--orange-dark)); box-shadow: 0 3px 8px rgb(189 62 36 / 0.2); color: white; font: bold 14px Arial, sans-serif; }
+.material-upload:hover span { filter: brightness(1.08); transform: translateY(-1px); }
+.upload-hint { display: block; margin-top: 9px; color: #8a5b4c; }
 .file-queue { margin-top: 14px; }
 .file-queue-heading,
 .file-queue li {
