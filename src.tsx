@@ -301,12 +301,23 @@ function App() {
         setAudio(saved); setAudioUrl(URL.createObjectURL(saved));
         stream.getTracks().forEach((track) => track.stop());
         if (timer.current) clearInterval(timer.current);
-        setRecording(false); setRecordingPaused(false); setStatus("Recording ready to process");
+        setRecording(false); setRecordingPaused(false); void saveRecording(saved);
       };
       recorder.current = next; next.start(); setSeconds(0);
       timer.current = setInterval(() => setSeconds((value) => { if (value + 1 >= MAX_AUDIO_SECONDS) { next.stop(); return MAX_AUDIO_SECONDS; } return value + 1; }), 1000);
       setRecording(true); setStatus("Recording");
     } catch { setStatus("Microphone access is required to record."); }
+  }
+  async function saveRecording(recording: Blob) {
+    setProcessing(true); setStatus("Saving recording…");
+    try {
+      const { data: session, error } = await supabase.from("lectures").insert({ title: lecture, slide_mode: slideMode }).select().single();
+      if (error || !session) throw error ?? new Error("Could not save the recording.");
+      await upload(session.id, new File([recording], "recording.webm", { type: recording.type || "audio/webm" }));
+      setAudio(null); await loadLectures(); setStatus("Recording saved — continue from Saved sessions.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not save the recording.");
+    } finally { setProcessing(false); }
   }
   function toggleRecordingPause() {
     const current = recorder.current;
@@ -875,7 +886,9 @@ function App() {
                   >
                     Add additional content
                   </button>
-                  {session.status === "error" ? (
+                  {session.status === "ready" && !session.notes ? (
+                    <button disabled={processing} onClick={() => processLecture(session.id, "Starting transcription…").catch(() => {})}>Make study notes</button>
+                  ) : session.status === "error" ? (
                     <button disabled={processing} onClick={() => processLecture(session.id, "Retrying processing…").catch(() => {})}>Retry processing</button>
                   ) : (
                     <button onClick={() => openPrompt(session)}>Redo notes</button>
