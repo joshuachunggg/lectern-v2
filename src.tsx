@@ -21,8 +21,16 @@ const MAX_TRANSCRIPTION_FILE_BYTES = 24 * 1024 * 1024;
 const AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "wav", "webm", "ogg", "aac", "flac"]);
 const audioDuration = (file: File) => new Promise<number>((resolve, reject) => {
   const audio = document.createElement("audio"), url = URL.createObjectURL(file);
-  audio.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(audio.duration); };
-  audio.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`Could not read ${file.name}.`)); };
+  let settled = false;
+  const finish = (duration?: number) => {
+    if (settled) return;
+    settled = true;
+    URL.revokeObjectURL(url);
+    Number.isFinite(duration) ? resolve(duration!) : reject(new Error(`Could not read ${file.name}.`));
+  };
+  audio.onloadedmetadata = () => Number.isFinite(audio.duration) ? finish(audio.duration) : audio.currentTime = 1e101;
+  audio.ondurationchange = () => Number.isFinite(audio.duration) && finish(audio.duration);
+  audio.onerror = () => finish();
   audio.src = url;
 });
 const isAudio = (file: File) => AUDIO_EXTENSIONS.has(file.name.toLowerCase().split(".").pop() ?? "");
@@ -86,6 +94,7 @@ function App() {
     [lecture, setLecture] = useState("Untitled lecture"),
     [slideMode, setSlideMode] = useState<SlideMode>("text"),
     [recording, setRecording] = useState(false),
+    [recordingPaused, setRecordingPaused] = useState(false),
     [seconds, setSeconds] = useState(0),
     [audio, setAudio] = useState<Blob | null>(null),
     [audioUrl, setAudioUrl] = useState(""),
@@ -292,12 +301,24 @@ function App() {
         setAudio(saved); setAudioUrl(URL.createObjectURL(saved));
         stream.getTracks().forEach((track) => track.stop());
         if (timer.current) clearInterval(timer.current);
-        setRecording(false); setStatus("Recording ready to process");
+        setRecording(false); setRecordingPaused(false); setStatus("Recording ready to process");
       };
       recorder.current = next; next.start(); setSeconds(0);
       timer.current = setInterval(() => setSeconds((value) => { if (value + 1 >= MAX_AUDIO_SECONDS) { next.stop(); return MAX_AUDIO_SECONDS; } return value + 1; }), 1000);
       setRecording(true); setStatus("Recording");
     } catch { setStatus("Microphone access is required to record."); }
+  }
+  function toggleRecordingPause() {
+    const current = recorder.current;
+    if (!current) return;
+    if (current.state === "recording") {
+      current.pause(); if (timer.current) clearInterval(timer.current);
+      setRecordingPaused(true); setStatus("Recording paused");
+    } else if (current.state === "paused") {
+      current.resume();
+      timer.current = setInterval(() => setSeconds((value) => { if (value + 1 >= MAX_AUDIO_SECONDS) { current.stop(); return MAX_AUDIO_SECONDS; } return value + 1; }), 1000);
+      setRecordingPaused(false); setStatus("Recording");
+    }
   }
   function queueMaterials(added: File[]) {
     const accepted = added.filter(isMaterial), rejected = added.filter((file) => !isMaterial(file));
@@ -663,6 +684,7 @@ function App() {
             <button className={`recording-control ${recording ? "stop" : ""}`} onClick={toggleRecording}>
               {recording ? `Stop recording · ${clock(seconds)}` : "Start recording"}
             </button>
+            {recording && <button className="secondary-action recording-control" onClick={toggleRecordingPause}>{recordingPaused ? "Resume recording" : "Pause recording"}</button>}
             <label className="audio-upload">
               <input
                 type="file"
