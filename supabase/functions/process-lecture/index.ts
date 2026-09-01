@@ -34,7 +34,9 @@ const transcribe = async (file: Blob | null, filename: string, audioUrl?: string
   form.append('model', 'gpt-transcribe');
   const response = await openai('/audio/transcriptions', { method: 'POST', body: form });
   if (!response.ok) throw new Error(`Transcription failed: ${await response.text()}`);
-  const result = await response.json(); return { text: result.text, usage: { provider: 'openai', usage: result.usage ?? {} }, cost: transcriptionCost(result.usage) };
+  const result = await response.json(), seconds = Number(result.usage?.seconds);
+  if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Transcription provider did not report audio duration.');
+  return { text: result.text, usage: { provider: 'openai', seconds, usage: result.usage }, cost: transcriptionCost(result.usage) };
 };
 
 Deno.serve(async request => {
@@ -47,6 +49,7 @@ Deno.serve(async request => {
   const { data: lecture } = await admin.from('lectures').select('*').eq('id', lecture_id).eq('owner_id', user.id).single(); if (!lecture) return fail('Lecture not found.');
   const { data: sources } = await admin.from('lecture_sources').select('*').eq('lecture_id', lecture_id).order('created_at');
   try {
+    if (!sources?.some(source => source.source_type === 'audio')) throw new Error('Upload lecture audio before making study notes.');
     if (!synthesize_only && lecture.billed_seconds !== null && sources?.some(source => source.source_type === 'audio' && !source.transcript)) throw new Error('Create a new lecture to add audio after processing has finished.');
     if (!synthesize_only) {
       if (!sources?.length || sources.length > 12 || sources.some(source => source.source_type === 'audio' ? !allowedAudio.has(extension(source.filename)) : !allowedMaterial.has(extension(source.filename)))) throw new Error('Upload up to 12 audio, PDF, PowerPoint, or text files.');
@@ -63,7 +66,7 @@ Deno.serve(async request => {
       if (source.source_type === 'audio') {
         const { data: audioUrl } = transcriptionProvider === 'groq' ? await admin.storage.from('lecture-files').createSignedUrl(source.storage_path, 3600) : { data: null };
         const { data: file, error } = audioUrl ? { data: null, error: null } : await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file && !audioUrl) throw error ?? new Error(`Could not download ${source.filename}.`);
-        const result = await transcribe(file, source.filename, audioUrl?.signedUrl); const seconds = Number((result.usage as any).seconds ?? source.duration_seconds ?? 0); transcripts.push(result.text); audioSeconds += seconds; transcriptionUsage.push(result.usage); estimatedCost += result.cost;
+        const result = await transcribe(file, source.filename, audioUrl?.signedUrl); const seconds = Number((result.usage as any).seconds); transcripts.push(result.text); audioSeconds += seconds; transcriptionUsage.push(result.usage); estimatedCost += result.cost;
         const { error: sourceError } = await admin.from('lecture_sources').update({ transcript: result.text, duration_seconds: seconds }).eq('id', source.id); if (sourceError) throw sourceError;
         const { error: lectureError } = await admin.from('lectures').update({ transcript: transcripts.join('\n\n'), api_usage: { ...lecture.api_usage, transcription: transcriptionUsage }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id); if (lectureError) throw lectureError;
       }

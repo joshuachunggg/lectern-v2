@@ -176,15 +176,18 @@ test('billing handles subscriptions, prepaid deposits, and the UI separates save
 
 test('only the backend can set billing and processing fields', async () => {
   const migration = await readFile('supabase/migrations/20260901000000_harden_processing_access.sql', 'utf8');
+  const followUpMigration = await readFile('supabase/migrations/20260901000001_require_audio_and_limit_redos.sql', 'utf8');
   const worker = await readFile('supabase/functions/process-lecture/index.ts', 'utf8');
   const billing = await readFile('supabase/functions/billing/index.ts', 'utf8');
   assert.match(migration, /revoke insert, update on public\.lectures from anon, authenticated/);
   assert.match(migration, /grant update \(title, slide_mode, synthesis_prompt, note_detail\) on public\.lectures to authenticated/);
   assert.match(migration, /revoke update on public\.lecture_sources from anon, authenticated/);
   assert.match(migration, /create or replace function public\.claim_note_run/);
-  assert.match(migration, /note_runs < 3/);
+  assert.match(followUpMigration, /note_runs < 2/);
   assert.match(migration, /Audio files must be audio sources/);
   assert.match(worker, /lecture\.billed_seconds !== null/);
+  assert.match(worker, /Upload lecture audio before making study notes/);
+  assert.match(worker, /result\.usage\?\.seconds/);
   assert.match(worker, /claim_note_run/);
   assert.match(billing, /Idempotency-Key/);
   assert.match(billing, /Billing setup is already in progress/);

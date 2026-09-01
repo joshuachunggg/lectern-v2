@@ -430,7 +430,7 @@ function App() {
         ? [new File([materials], "pasted-material.txt", { type: "text/plain" })]
         : []),
     ];
-    if (!sources.length) return;
+    if (!sources.some(isAudio)) return setStatus("Upload lecture audio before making study notes.");
     if (files.reduce((total, file) => total + file.size, 0) > MAX_COURSE_MATERIAL_BYTES)
       return setStatus("Lecture slides can total at most 5 MB.");
     const audioSeconds = (await Promise.all(sources.filter(isAudio).map(audioDuration))).reduce((total, seconds) => total + seconds, 0);
@@ -935,10 +935,10 @@ function App() {
                     <button disabled={processing} onClick={() => processLecture(session.id, "Starting transcription…").catch(() => {})}>Make study notes</button>
                   ) : session.status === "error" ? (
                     <button disabled={processing} onClick={() => processLecture(session.id, "Retrying processing…").catch(() => {})}>Retry processing</button>
-                  ) : session.note_runs < 3 ? (
+                  ) : session.note_runs < 2 ? (
                     <button onClick={() => openPrompt(session)}>Redo notes</button>
                   ) : (
-                    <button disabled>All note versions used</button>
+                    <button disabled>Redo already used</button>
                   )}
                 </div>
               </article>
@@ -966,7 +966,7 @@ function App() {
           <button disabled={processing}>Add slides and rebuild notes</button>
         </form>
       </dialog>
-      <dialog className="modal" ref={promptDialog}>
+      <dialog className="modal prompt-modal" ref={promptDialog}>
         <div className="modal-heading">
           <h2>Custom note prompt</h2>
           <button type="button" onClick={() => promptDialog.current?.close()}>

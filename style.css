@@ -663,6 +663,42 @@ footer {
 .modal > button:last-child {
   margin-top: 16px;
 }
+.prompt-modal {
+  width: min(560px, calc(100% - 32px));
+  padding: 28px;
+}
+.prompt-modal .modal-heading h2 {
+  font: 700 20px/1.2 Arial, Helvetica, sans-serif;
+  letter-spacing: -0.02em;
+}
+.prompt-modal > label {
+  margin-top: 22px;
+  color: #526061;
+  font-size: 13px;
+  font-weight: 700;
+}
+.prompt-modal textarea {
+  min-height: 155px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffefa;
+  color: var(--ink);
+  font: 14px/1.5 Arial, Helvetica, sans-serif;
+  resize: vertical;
+}
+.prompt-modal .saved-prompts {
+  margin-top: 18px;
+}
+.prompt-modal .saved-prompts small {
+  color: #526061;
+  font-size: 12px;
+  font-weight: 700;
+}
+.prompt-modal .save-prompt {
+  margin-top: 18px;
+}
 .pricing-options { display: grid; gap: 12px; margin-top: 18px; }
 .pricing-options section { padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: #fffefa; }
 .pricing-options .paid-plan { border-color: #e7b7a5; background: #fff5f0; }
