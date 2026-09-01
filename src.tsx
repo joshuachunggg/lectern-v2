@@ -386,10 +386,10 @@ function App() {
     setFiles((current) => {
       const next = [...current, ...accepted];
       if (next.reduce((total, file) => total + file.size, 0) > MAX_COURSE_MATERIAL_BYTES) {
-        setStatus("Course materials can total at most 5 MB.");
+        setStatus("Lecture slides can total at most 5 MB.");
         return current;
       }
-      setStatus(`${accepted.length} course material${accepted.length === 1 ? "" : "s"} ready${rejected.length ? " — export PowerPoint files as PDFs before uploading." : ""}`);
+      setStatus(`${accepted.length} slide file${accepted.length === 1 ? "" : "s"} ready${rejected.length ? " — export PowerPoint files as PDFs before uploading." : ""}`);
       return next;
     });
   }
@@ -432,7 +432,7 @@ function App() {
     ];
     if (!sources.length) return;
     if (files.reduce((total, file) => total + file.size, 0) > MAX_COURSE_MATERIAL_BYTES)
-      return setStatus("Course materials can total at most 5 MB.");
+      return setStatus("Lecture slides can total at most 5 MB.");
     const audioSeconds = (await Promise.all(sources.filter(isAudio).map(audioDuration))).reduce((total, seconds) => total + seconds, 0);
     if (audioSeconds > MAX_AUDIO_SECONDS)
       return setStatus("A lecture can contain at most 90 minutes of audio.");
@@ -627,7 +627,7 @@ function App() {
           <div className="landing-section-heading"><p className="eyebrow">How it works</p><h2>Stay present. Nothing gets lost.</h2></div>
           <ol className="landing-steps">
             <li><strong>Record or upload</strong><span>Add one recording, or capture the lecture as it happens.</span></li>
-            <li><strong>Set the context</strong><span>Include course materials and the note format that helps you study.</span></li>
+            <li><strong>Set the context</strong><span>Include lecture slides and the note format that helps you study.</span></li>
             <li><strong>Study with clarity</strong><span>Receive a transcript and structured notes built around the lecture.</span></li>
           </ol>
         </section>
@@ -766,7 +766,7 @@ function App() {
         <article className="materials card">
           <div className="card-heading">
             <span>02</span>
-            <p>Course materials</p>
+            <p>Lecture slides</p>
           </div>
           <div className="card-body">
             <label className={`material-dropzone${draggingMaterials ? " is-dragging" : ""}`} onDragEnter={() => setDraggingMaterials(true)} onDragOver={(event) => event.preventDefault()} onDragLeave={leaveMaterialDropzone} onDrop={dropMaterials}>
@@ -777,8 +777,8 @@ function App() {
                 onChange={addFiles}
               />
               <span aria-hidden="true">▤</span>
-              <strong>Drop course files here</strong>
-              <small>or choose PDF or plain text</small>
+              <strong>Drop lecture slides here</strong>
+              <small>or choose a PDF or plain-text slide notes</small>
             </label>
             <label className="materials-label">
               <input
@@ -792,7 +792,7 @@ function App() {
             </label>
             {files.length > 0 && (
               <div className="file-queue material-queue">
-                <strong>Course files</strong>
+                <strong>Lecture slides</strong>
                 <ul>
                   {files.map((file, index) => (
                     <li key={`${file.name}-${index}`}><span className="file-icon" aria-hidden="true">▤</span><span className="file-details"><strong>{file.name}</strong><small>{materialSize(file.size)}</small></span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeMaterial(index)}>Remove</button></li>
@@ -801,14 +801,14 @@ function App() {
               </div>
             )}
             <label className="materials-label" htmlFor="materials">
-              Or paste material
+              Or paste slide text
             </label>
             <textarea
               id="materials"
               value={materials}
               maxLength={100000}
               onChange={(event) => setMaterials(event.target.value)}
-              placeholder="Paste the syllabus, an outline, or lecture context…"
+              placeholder="Paste slide text or lecture context…"
             />
           </div>
         </article>
@@ -836,7 +836,7 @@ function App() {
               {[
                 "Upload source files",
                 "Transcribe lecture",
-                "Read course material",
+                "Read lecture slides",
                 "Synthesize notes",
                 "Study notes ready",
               ].map((label, index) => (
@@ -861,7 +861,7 @@ function App() {
           <small>
             {canProcess
               ? "Your source material is ready."
-              : "Upload audio or add materials to continue."}
+              : "Upload audio or add lecture slides to continue."}
           </small>
         </article>
       </section>
@@ -929,7 +929,7 @@ function App() {
                       contentDialog.current?.showModal();
                     }}
                   >
-                    Add course material
+                    Add lecture slides
                   </button>
                   {session.status === "ready" && !session.notes ? (
                     <button disabled={processing} onClick={() => processLecture(session.id, "Starting transcription…").catch(() => {})}>Make study notes</button>
@@ -950,20 +950,20 @@ function App() {
       <dialog className="modal" ref={contentDialog}>
         <form onSubmit={addToLecture}>
           <div className="modal-heading">
-            <h2>Add course material</h2>
+            <h2>Add lecture slides</h2>
             <button type="button" onClick={() => contentDialog.current?.close()}>
               Close
             </button>
           </div>
           <label>
-            Slides or materials
+            Lecture slides
             <input name="materials" type="file" accept=".pdf,.txt" multiple />
           </label>
           <label>
-            Or paste material
+            Or paste slide text
             <textarea name="transcript" maxLength={100000} placeholder="Paste additional lecture context…" />
           </label>
-          <button disabled={processing}>Add material and rebuild notes</button>
+          <button disabled={processing}>Add slides and rebuild notes</button>
         </form>
       </dialog>
       <dialog className="modal" ref={promptDialog}>
@@ -1041,7 +1041,7 @@ function App() {
         </dialog>
       )}
       <footer>
-        Audio and materials are saved privately while they are processed.
+        Audio and slides are saved privately while they are processed.
       </footer>
     </main>
   );

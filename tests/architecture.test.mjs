@@ -39,7 +39,7 @@ test('new lectures save optional note preferences', async () => {
   assert.match(app, /remarkPlugins=\{\[remarkGfm\]\}/);
   assert.match(app, /Math\.ceil\(indent\.length \/ 4\) \* 4/);
   assert.match(app, /synthesize_only: synthesizeOnly/);
-  assert.match(app, /Add course material/);
+  assert.match(app, /Add lecture slides/);
   assert.match(app, /function openPrompt\(session: Lecture \| null\)/);
   assert.match(app, /from\("saved_prompts"\)/);
   assert.doesNotMatch(app, /Paste transcript/);
@@ -232,18 +232,18 @@ test('paid users are sent to preload overage before a lecture can exceed include
   assert.match(app, /Transcripts, notes, and custom instructions/);
 });
 
-test('course materials can be selected before processing', async () => {
+test('lecture slides can be selected before processing', async () => {
   const app = await readFile('src.tsx', 'utf8');
   const style = await readFile('style.css', 'utf8');
   assert.match(app, /function queueMaterials/);
-  assert.match(app, /Drop course files here/);
+  assert.match(app, /Drop lecture slides here/);
   assert.match(app, /function removeMaterial/);
   assert.match(app, /PowerPoint files aren’t supported\. Export them as PDFs before uploading\./);
   assert.match(app, /accept="\.pdf,\.txt"/);
   assert.match(app, /function dropMaterials/);
   assert.match(app, /onDrop=\{dropMaterials\}/);
   assert.match(app, /is-dragging/);
-  assert.match(app, /Course materials can total at most 5 MB/);
+  assert.match(app, /Lecture slides can total at most 5 MB/);
   assert.match(app, /status === "Study notes are ready\."/);
   assert.match(style, /\.file-queue ul \{ display: grid; gap: 7px; max-height: 136px;/);
   assert.doesNotMatch(style, /^ul \{/m);
