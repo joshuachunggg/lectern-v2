@@ -19,6 +19,38 @@ const materialSize = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
 const MAX_AUDIO_SECONDS = 90 * 60;
 const MAX_TRANSCRIPTION_FILE_BYTES = 24 * 1024 * 1024;
 const AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "wav", "webm", "ogg", "aac", "flac"]);
+const DRAFT_DB = "lectern-recording-draft";
+type RecordingDraft = { audio: Blob; title: string; slideMode: SlideMode; seconds: number };
+const draftDatabase = () => new Promise<IDBDatabase>((resolve, reject) => {
+  const request = indexedDB.open(DRAFT_DB, 1);
+  request.onupgradeneeded = () => request.result.createObjectStore("recording", { keyPath: "id" });
+  request.onsuccess = () => resolve(request.result);
+  request.onerror = () => reject(request.error);
+});
+const draftTransaction = async (mode: IDBTransactionMode, run: (store: IDBObjectStore) => void) => {
+  const database = await draftDatabase(), transaction = database.transaction("recording", mode);
+  run(transaction.objectStore("recording"));
+  return new Promise<void>((resolve, reject) => {
+    transaction.oncomplete = () => { database.close(); resolve(); };
+    transaction.onerror = () => { database.close(); reject(transaction.error); };
+  });
+};
+const startDraft = (draft: Omit<RecordingDraft, "audio">, audio?: Blob) =>
+  draftTransaction("readwrite", store => { store.clear(); store.put({ id: "meta", ...draft }); if (audio) store.put({ id: "chunk-000000", audio }); });
+const appendDraft = (index: number, audio: Blob, seconds: number, draft: Omit<RecordingDraft, "audio" | "seconds">) =>
+  draftTransaction("readwrite", store => { store.put({ id: `chunk-${String(index).padStart(6, "0")}`, audio }); store.put({ id: "meta", ...draft, seconds }); });
+const clearDraft = () => draftTransaction("readwrite", store => store.clear());
+const loadDraft = async (): Promise<RecordingDraft | null> => {
+  const database = await draftDatabase(), transaction = database.transaction("recording"), request = transaction.objectStore("recording").getAll();
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => {
+      database.close();
+      const meta = request.result.find(entry => entry.id === "meta"), chunks = request.result.filter(entry => entry.audio).map(entry => entry.audio as Blob);
+      resolve(meta && chunks.length ? { audio: new Blob(chunks, { type: chunks[0].type }), title: meta.title, slideMode: meta.slideMode, seconds: meta.seconds } : null);
+    };
+    request.onerror = () => { database.close(); reject(request.error); };
+  });
+};
 const audioDuration = (file: File) => new Promise<number>((resolve, reject) => {
   const audio = document.createElement("audio"), url = URL.createObjectURL(file);
   let settled = false;
@@ -95,10 +127,12 @@ function App() {
     [slideMode, setSlideMode] = useState<SlideMode>("text"),
     [recording, setRecording] = useState(false),
     [recordingPaused, setRecordingPaused] = useState(false),
+    [restoredRecording, setRestoredRecording] = useState(false),
     [seconds, setSeconds] = useState(0),
     [audio, setAudio] = useState<Blob | null>(null),
     [audioUrl, setAudioUrl] = useState(""),
     [audioFiles, setAudioFiles] = useState<File[]>([]),
+    [recordingDraft, setRecordingDraft] = useState<RecordingDraft | null>(null),
     [files, setFiles] = useState<File[]>([]),
     [draggingMaterials, setDraggingMaterials] = useState(false),
     [materials, setMaterials] = useState(""),
@@ -162,6 +196,7 @@ function App() {
       if (timer.current) clearInterval(timer.current);
     };
   }, []);
+  useEffect(() => { loadDraft().then(setRecordingDraft).catch(() => {}); }, []);
   useEffect(() => {
     const updatePage = () => setPage(window.location.hash === "#saved-sessions" ? "saved" : window.location.hash === "#manage-plan" ? "plan" : "new");
     window.addEventListener("hashchange", updatePage);
@@ -294,18 +329,24 @@ function App() {
   async function toggleRecording() {
     if (recording) return recorder.current?.stop();
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } }), chunks: Blob[] = [], next = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
-      next.ondataavailable = (event) => event.data.size && chunks.push(event.data);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } }), chunks: Blob[] = audio ? [audio] : [], next = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
+      let chunkIndex = audio ? 1 : 0, recordedSeconds = seconds;
+      await startDraft({ title: lecture, slideMode, seconds }, audio ?? undefined).catch(() => {});
+      next.ondataavailable = (event) => {
+        if (!event.data.size) return;
+        chunks.push(event.data);
+        void appendDraft(chunkIndex++, event.data, recordedSeconds, { title: lecture, slideMode }).catch(() => {});
+      };
       next.onstop = () => {
         const saved = new Blob(chunks, { type: next.mimeType });
         setAudio(saved); setAudioUrl(URL.createObjectURL(saved));
         stream.getTracks().forEach((track) => track.stop());
         if (timer.current) clearInterval(timer.current);
-        setRecording(false); setRecordingPaused(false); void saveRecording(saved);
+        setRecording(false); setRecordingPaused(false); setRestoredRecording(false); void clearDraft().catch(() => {}); void saveRecording(saved);
       };
-      recorder.current = next; next.start(); setSeconds(0);
-      timer.current = setInterval(() => setSeconds((value) => { if (value + 1 >= MAX_AUDIO_SECONDS) { next.stop(); return MAX_AUDIO_SECONDS; } return value + 1; }), 1000);
-      setRecording(true); setStatus("Recording");
+      recorder.current = next; next.start(1000); if (!audio) setSeconds(0);
+      timer.current = setInterval(() => setSeconds((value) => { recordedSeconds = value + 1; if (recordedSeconds >= MAX_AUDIO_SECONDS) { next.stop(); return MAX_AUDIO_SECONDS; } return recordedSeconds; }), 1000);
+      setRestoredRecording(false); setRecording(true); setStatus("Recording");
     } catch { setStatus("Microphone access is required to record."); }
   }
   async function saveRecording(recording: Blob) {
@@ -330,6 +371,13 @@ function App() {
       timer.current = setInterval(() => setSeconds((value) => { if (value + 1 >= MAX_AUDIO_SECONDS) { current.stop(); return MAX_AUDIO_SECONDS; } return value + 1; }), 1000);
       setRecordingPaused(false); setStatus("Recording");
     }
+  }
+  function restoreRecordingDraft() {
+    if (!recordingDraft) return;
+    setLecture(recordingDraft.title); setSlideMode(recordingDraft.slideMode); setSeconds(recordingDraft.seconds); setRestoredRecording(true);
+    setAudio(recordingDraft.audio); setAudioUrl(URL.createObjectURL(recordingDraft.audio));
+    setRecordingDraft(null); setStatus("Recording restored — continue recording or make notes.");
+    void clearDraft().catch(() => {});
   }
   function queueMaterials(added: File[]) {
     const accepted = added.filter(isMaterial), rejected = added.filter((file) => !isMaterial(file));
@@ -686,14 +734,14 @@ function App() {
             <p>Lecture audio</p>
           </div>
           <div className="card-body">
-            <div className={`upload-mark ${recording ? "live" : ""}`} aria-hidden="true">♫</div>
+            <div className={`upload-mark ${recording || restoredRecording ? "live" : ""}`} aria-hidden="true">♫</div>
             <h2>Record or upload audio</h2>
             <p>Record in Lectern or choose recordings from your device.</p>
             <p className="status" aria-live="polite">
               {status}
             </p>
             <button className={`recording-control ${recording ? "stop" : ""}`} onClick={toggleRecording}>
-              {recording ? `Stop recording · ${clock(seconds)}` : "Start recording"}
+              {recording ? `Stop recording · ${clock(seconds)}` : restoredRecording ? `Continue recording · ${clock(seconds)}` : "Start recording"}
             </button>
             {recording && <button className="secondary-action recording-control" onClick={toggleRecordingPause}>{recordingPaused ? "Resume recording" : "Pause recording"}</button>}
             <label className="audio-upload">
@@ -705,6 +753,7 @@ function App() {
               />
               <span>Choose audio files</span>
             </label>
+            {recordingDraft && <button className="restore-recording" onClick={restoreRecordingDraft}>Restore last saved session?</button>}
             {audioFiles.length > 0 && (
               <div className="file-queue audio-queue">
                 <div className="file-queue-heading"><strong>{audioFiles.length} audio file{audioFiles.length === 1 ? "" : "s"} ready</strong><button type="button" onClick={() => setAudioFiles([])}>Clear all</button></div>

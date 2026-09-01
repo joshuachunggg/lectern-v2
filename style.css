@@ -486,9 +486,10 @@ footer {
 .empty-sessions { color: #526061; }
 .saved-session-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(230px, 280px));
   gap: 12px;
 }
+.restore-recording { display: block; margin-top: 5px; padding: 0; border: 0; background: none; box-shadow: none; color: var(--orange); font-size: 12px; text-decoration: underline; }
 .saved-session {
   position: relative;
   display: flex;
