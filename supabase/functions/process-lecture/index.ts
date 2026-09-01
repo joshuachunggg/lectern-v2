@@ -47,11 +47,14 @@ Deno.serve(async request => {
   const { data: lecture } = await admin.from('lectures').select('*').eq('id', lecture_id).eq('owner_id', user.id).single(); if (!lecture) return fail('Lecture not found.');
   const { data: sources } = await admin.from('lecture_sources').select('*').eq('lecture_id', lecture_id).order('created_at');
   try {
+    if (!synthesize_only && lecture.billed_seconds !== null && sources?.some(source => source.source_type === 'audio' && !source.transcript)) throw new Error('Create a new lecture to add audio after processing has finished.');
     if (!synthesize_only) {
       if (!sources?.length || sources.length > 12 || sources.some(source => source.source_type === 'audio' ? !allowedAudio.has(extension(source.filename)) : !allowedMaterial.has(extension(source.filename)))) throw new Error('Upload up to 12 audio, PDF, PowerPoint, or text files.');
       const { data: claim, error: claimError } = await admin.rpc('claim_lecture_for_owner_v2', { p_lecture_id: lecture_id, p_owner_id: user.id }).single();
       if (claimError || !claim) throw new Error(claimError?.message ?? 'Could not confirm your lecture allowance.');
     }
+    const { error: noteRunError } = await admin.rpc('claim_note_run', { p_lecture_id: lecture_id, p_owner_id: user.id, p_synthesize_only: synthesize_only });
+    if (noteRunError) throw new Error(noteRunError.message);
     if (!synthesize_only) await admin.from('lectures').update({ status: 'transcribing', status_message: 'Transcribing lecture…' }).eq('id', lecture_id);
     const transcripts: string[] = [], materials: string[] = [], files: { type: 'input_file'; file_data: string; filename: string }[] = [], transcriptionUsage: unknown[] = lecture.api_usage?.transcription ?? []; let estimatedCost = Number(lecture.estimated_cost_usd ?? 0), audioSeconds = 0;
     for (const source of sources ?? []) {

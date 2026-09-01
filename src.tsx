@@ -101,6 +101,7 @@ type Lecture = {
   notes: string | null;
   synthesis_prompt: string;
   note_detail: number;
+  note_runs: number;
 };
 type SavedPrompt = { id: string; name: string; prompt: string };
 type Billing = { active: boolean; included_seconds: number; overage_seconds: number; credit_cents: number; free_used: boolean; cancel_at: string | null };
@@ -492,9 +493,8 @@ function App() {
     if (!contentSession) return;
     const form = event.currentTarget,
       data = new FormData(form),
-      audioFiles = Array.from(data.getAll("audio")).filter((file): file is File => file instanceof File && file.size > 0),
       materialFiles = Array.from(data.getAll("materials")).filter((file): file is File => file instanceof File && file.size > 0),
-      added = [...audioFiles, ...materialFiles],
+      added = [...materialFiles],
       transcript = String(data.get("transcript") ?? "").trim();
     if (materialFiles.some((file) => !isMaterial(file))) return setStatus(materialFiles.some(isPowerPoint) ? "PowerPoint files aren’t supported. Export them as PDFs before uploading." : "Upload a PDF or plain-text file.");
     if (transcript)
@@ -503,12 +503,8 @@ function App() {
       );
     if (!added.length) return;
     try {
-      if ((await Promise.all(added.filter(isAudio).map(audioDuration))).reduce((total, seconds) => total + seconds, 0) > MAX_AUDIO_SECONDS)
-        return setStatus("Added audio can contain at most 90 minutes.");
       setProcessing(true);
-      setStatus("Preparing audio…");
-      const uploadSources = (await Promise.all(added.map(file => isAudio(file) ? chunkAudio(file) : [file]))).flat();
-      if (uploadSources.length > 12) throw new Error("This lecture becomes more than 12 audio chunks. Split it into fewer recordings.");
+      const uploadSources = added;
       setStatus(`Uploading sources for ${contentSession.title}…`);
       for (const file of uploadSources) await upload(contentSession.id, file);
       contentDialog.current?.close();
@@ -933,14 +929,16 @@ function App() {
                       contentDialog.current?.showModal();
                     }}
                   >
-                    Add additional content
+                    Add course material
                   </button>
                   {session.status === "ready" && !session.notes ? (
                     <button disabled={processing} onClick={() => processLecture(session.id, "Starting transcription…").catch(() => {})}>Make study notes</button>
                   ) : session.status === "error" ? (
                     <button disabled={processing} onClick={() => processLecture(session.id, "Retrying processing…").catch(() => {})}>Retry processing</button>
-                  ) : (
+                  ) : session.note_runs < 3 ? (
                     <button onClick={() => openPrompt(session)}>Redo notes</button>
+                  ) : (
+                    <button disabled>All note versions used</button>
                   )}
                 </div>
               </article>
@@ -952,24 +950,20 @@ function App() {
       <dialog className="modal" ref={contentDialog}>
         <form onSubmit={addToLecture}>
           <div className="modal-heading">
-            <h2>Add additional content</h2>
+            <h2>Add course material</h2>
             <button type="button" onClick={() => contentDialog.current?.close()}>
               Close
             </button>
           </div>
           <label>
-            Audio files
-            <input name="audio" type="file" accept="audio/*,.m4a,.mp3,.wav,.webm" multiple />
-          </label>
-          <label>
             Slides or materials
             <input name="materials" type="file" accept=".pdf,.txt" multiple />
           </label>
           <label>
-            Or paste a transcript
-            <textarea name="transcript" maxLength={100000} placeholder="Paste an additional lecture transcript…" />
+            Or paste material
+            <textarea name="transcript" maxLength={100000} placeholder="Paste additional lecture context…" />
           </label>
-          <button disabled={processing}>Add content and rebuild notes</button>
+          <button disabled={processing}>Add material and rebuild notes</button>
         </form>
       </dialog>
       <dialog className="modal" ref={promptDialog}>

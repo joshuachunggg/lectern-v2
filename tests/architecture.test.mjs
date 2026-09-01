@@ -39,7 +39,7 @@ test('new lectures save optional note preferences', async () => {
   assert.match(app, /remarkPlugins=\{\[remarkGfm\]\}/);
   assert.match(app, /Math\.ceil\(indent\.length \/ 4\) \* 4/);
   assert.match(app, /synthesize_only: synthesizeOnly/);
-  assert.match(app, /Add additional content/);
+  assert.match(app, /Add course material/);
   assert.match(app, /function openPrompt\(session: Lecture \| null\)/);
   assert.match(app, /from\("saved_prompts"\)/);
   assert.doesNotMatch(app, /Paste transcript/);
@@ -172,6 +172,23 @@ test('billing handles subscriptions, prepaid deposits, and the UI separates save
   assert.match(webhook, /apply_paid_invoice/);
   assert.match(app, /cancel_at/);
   assert.match(await readFile('supabase/migrations/20260828000001_harden_subscription_billing.sql', 'utf8'), /overage_seconds = 0/);
+});
+
+test('only the backend can set billing and processing fields', async () => {
+  const migration = await readFile('supabase/migrations/20260901000000_harden_processing_access.sql', 'utf8');
+  const worker = await readFile('supabase/functions/process-lecture/index.ts', 'utf8');
+  const billing = await readFile('supabase/functions/billing/index.ts', 'utf8');
+  assert.match(migration, /revoke insert, update on public\.lectures from anon, authenticated/);
+  assert.match(migration, /grant update \(title, slide_mode, synthesis_prompt, note_detail\) on public\.lectures to authenticated/);
+  assert.match(migration, /revoke update on public\.lecture_sources from anon, authenticated/);
+  assert.match(migration, /create or replace function public\.claim_note_run/);
+  assert.match(migration, /note_runs < 3/);
+  assert.match(migration, /Audio files must be audio sources/);
+  assert.match(worker, /lecture\.billed_seconds !== null/);
+  assert.match(worker, /claim_note_run/);
+  assert.match(billing, /Idempotency-Key/);
+  assert.match(billing, /Billing setup is already in progress/);
+  assert.match(billing, /new Date\(account\.period_end\) > new Date\(\)/);
 });
 
 test('recorded and uploaded audio is capped at a lecture length and prepared for transcription', async () => {
