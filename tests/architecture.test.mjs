@@ -9,6 +9,9 @@ test('cloud worker uses OpenAI APIs and no local database', async () => {
   assert.match(worker, /\/responses/);
   assert.match(worker, /estimated_cost_usd/);
   assert.match(worker, /max_output_tokens: 4000 \+ detail \* 2400/);
+  assert.match(worker, /## Big picture/);
+  assert.match(worker, /## Retrieval practice/);
+  assert.doesNotMatch(worker, /## Detailed outline/);
   assert.match(worker, /User note preferences/);
   assert.match(worker, /synthesize_only/);
   assert.match(worker, /synthesize_only && source\.source_type === 'audio'/);
@@ -18,9 +21,9 @@ test('cloud worker uses OpenAI APIs and no local database', async () => {
   assert.match(worker, /whisper-large-v3/);
   assert.match(worker, /createSignedUrl\(source\.storage_path, 3600\)/);
   assert.match(worker, /form\.append\('url', audioUrl\)/);
-  assert.match(worker, /not a table of contents; never put links in the outline or headings/);
-  assert.match(worker, /indent nested items with four spaces/);
-  assert.match(worker, /Always use this exact Markdown structure/);
+  assert.match(worker, /Do not create a separate outline, glossary, definitions section, or examples section/);
+  assert.match(worker, /Use tight nested lists/);
+  assert.match(worker, /Use this Markdown structure/);
   assert.match(worker, /const noteDepth/);
   assert.doesNotMatch(worker, /sqlite|codex exec/i);
 });
