@@ -40,6 +40,7 @@ test('new lectures save optional note preferences', async () => {
   assert.match(app, /synthesize_only: synthesizeOnly/);
   assert.match(app, /Edit slides & redo notes/);
   assert.match(app, /removedContentSources/);
+  assert.match(app, /pasted-material\.txt/);
   assert.match(app, /function openPrompt\(\)/);
   assert.match(app, /from\("saved_prompts"\)/);
   assert.doesNotMatch(app, /Paste transcript/);

@@ -502,10 +502,16 @@ function App() {
       if (error) throw error;
       const { data: stored, error: storageError } = await supabase.storage.from("lecture-files").list(session.id, { limit: 100 });
       if (storageError) throw storageError;
+      const pasted = (sources ?? []).filter((source) => source.filename === "pasted-material.txt");
+      const pastedText = await Promise.all(pasted.map(async (source) => {
+        const { data, error } = await supabase.storage.from("lecture-files").download(source.storage_path);
+        if (error || !data) throw error ?? new Error("Could not load pasted slide text.");
+        return data.text();
+      }));
       const sizes = new Map((stored ?? []).map((file) => [file.name, Number(file.metadata?.size ?? 0)]));
       setContentSession(session);
       setContentSources((sources ?? []).map((source) => ({ ...source, size: sizes.get(source.storage_path.split("/").slice(1).join("/")) ?? 0 })));
-      setRemovedContentSources([]); setContentFiles([]); setContentText(""); setContentPromptName("");
+      setRemovedContentSources(pasted.map((source) => source.id)); setContentFiles([]); setContentText(pastedText.join("\n\n")); setContentPromptName("");
       setContentNotePrompt(session.synthesis_prompt ?? ""); setContentNoteDetail(session.note_detail ?? 4);
       contentDialog.current?.showModal();
     } catch (error) { setStatus(error instanceof Error ? error.message : "Could not load lecture slides."); }
@@ -958,8 +964,8 @@ function App() {
             {contentFiles.map((file, index) => <li key={`${file.name}-${index}`}><span className="file-details"><strong>{file.name}</strong><small>{materialSize(file.size)}</small></span><button type="button" onClick={() => setContentFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))}>Remove</button></li>)}
           </ul></div>}
           <label>
-            Or paste slide text
-            <textarea value={contentText} maxLength={100000} onChange={(event) => setContentText(event.target.value)} placeholder="Paste additional lecture context…" />
+            Pasted slide text
+            <textarea value={contentText} maxLength={100000} onChange={(event) => setContentText(event.target.value)} placeholder="Paste slide text or lecture context…" />
           </label>
           <label>Optional note instructions<textarea value={contentNotePrompt} maxLength={MAX_PROMPT_CHARS} onChange={(event) => setContentNotePrompt(event.target.value)} placeholder="For example: prioritize exam-ready definitions and worked examples." /></label>
           {savedPrompts.length > 0 && <div className="saved-prompts"><small>Saved prompts</small>{savedPrompts.map((prompt) => <button key={prompt.id} type="button" onClick={() => setContentNotePrompt(prompt.prompt)}>{prompt.name}</button>)}</div>}
