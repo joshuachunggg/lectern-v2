@@ -756,6 +756,9 @@ footer {
   box-shadow: none;
   font-size: 12px;
 }
+.copy-control { position: relative; display: inline-flex; }
+.copied-confirmation { position: absolute; top: calc(100% + 7px); left: 50%; padding: 4px 7px; border-radius: 6px; background: var(--ink); color: white; font-size: 11px; font-weight: bold; transform: translateX(-50%); animation: copied-in 160ms ease-out both; white-space: nowrap; }
+@keyframes copied-in { from { opacity: 0; transform: translate(-50%, -4px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .notes-content {
   margin: 20px 0 0;
   color: #26383a;

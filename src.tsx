@@ -112,6 +112,8 @@ function App() {
   const marketingAppUrl = import.meta.env.VITE_APP_URL as string | undefined;
   const recorder = useRef<MediaRecorder | null>(null),
     timer = useRef<ReturnType<typeof setInterval> | null>(null),
+    copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
+    profileMenu = useRef<HTMLDetailsElement | null>(null),
     notesDialog = useRef<HTMLDialogElement | null>(null),
     contentDialog = useRef<HTMLDialogElement | null>(null),
     promptDialog = useRef<HTMLDialogElement | null>(null),
@@ -158,7 +160,15 @@ function App() {
     [overageNotice, setOverageNotice] = useState(""),
     [notes, setNotes] = useState(""),
     [transcript, setTranscript] = useState(""),
-    [showTranscript, setShowTranscript] = useState(false);
+    [showTranscript, setShowTranscript] = useState(false),
+    [copied, setCopied] = useState(false);
+  useEffect(() => {
+    const closeProfile = (event: PointerEvent) => {
+      if (profileMenu.current?.open && !profileMenu.current.contains(event.target as Node)) profileMenu.current.open = false;
+    };
+    document.addEventListener("pointerdown", closeProfile);
+    return () => document.removeEventListener("pointerdown", closeProfile);
+  }, []);
   const loadLectures = async () => {
     const { data } = await supabase
       .from("lectures")
@@ -243,7 +253,11 @@ function App() {
     setNotes(session.notes ?? "");
   };
   const copyToClipboard = (text: string, message: string) =>
-    navigator.clipboard.writeText(text).then(() => setStatus(message));
+    navigator.clipboard.writeText(text).then(() => {
+      setStatus(message); setCopied(true);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 1400);
+    });
   async function addOverageFunds() {
     const creditCents = Math.round(Number(creditAmount) * 100);
     if (!/^\d+(?:\.\d{1,2})?$/.test(creditAmount) || creditCents < 50 || creditCents > 10_000) return setStatus("Enter an amount from $0.50 to $100.00.");
@@ -686,7 +700,7 @@ function App() {
           <a className={page === "new" ? "active" : ""} href="#new-session">New session</a>
           <a className={page === "saved" ? "active" : ""} href="#saved-sessions">Saved sessions</a>
         </nav>
-        <details className="profile">
+        <details className="profile" ref={profileMenu}>
           <summary><span>{user}</span><small>{billing?.active ? "Paid plan" : "Free plan"}</small></summary>
           <div>
             <p>{billing?.active ? billing.included_seconds < 108000 ? `${Math.max(0, 30 - billing.included_seconds / 3600).toFixed(1)} audio hours remaining` : `$${((billing.credit_cents ?? 0) / 100).toFixed(2)} overage balance` : `${billing?.free_used ? 0 : 1} free lecture remaining`}</p>
@@ -1035,7 +1049,7 @@ function App() {
             <p className="eyebrow">Study notes</p>
             <div>
               {transcript && <button onClick={() => setShowTranscript((value) => !value)}>{showTranscript ? "Show notes" : "Show transcript"}</button>}
-              <button onClick={() => copyToClipboard(showTranscript ? transcript : notes.replace(/^( +)([-*+]|\d+[.)]) /gm, (_, indent, marker) => `${" ".repeat(Math.ceil(indent.length / 4) * 4)}${marker} `).replace(/[ \t]+$/gm, ""), showTranscript ? "Transcript copied to clipboard." : "Notes copied to clipboard.")}>{showTranscript ? "Copy transcript" : "Copy all"}</button>
+              <span className="copy-control"><button onClick={() => copyToClipboard(showTranscript ? transcript : notes.replace(/^( +)([-*+]|\d+[.)]) /gm, (_, indent, marker) => `${" ".repeat(Math.ceil(indent.length / 4) * 4)}${marker} `).replace(/[ \t]+$/gm, ""), showTranscript ? "Transcript copied to clipboard." : "Notes copied to clipboard.")}>{showTranscript ? "Copy transcript" : "Copy all"}</button>{copied && <span className="copied-confirmation" role="status">Copied!</span>}</span>
               <button onClick={() => setNotes("")}>Close</button>
             </div>
           </div>

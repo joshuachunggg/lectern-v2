@@ -90,6 +90,8 @@ test('processing resumes from completed source transcriptions', async () => {
   assert.match(worker, /source\.source_type === 'audio' && source\.transcript/);
   assert.match(worker, /from\('lecture_sources'\)\.update\(\{ transcript: result\.text, duration_seconds: seconds \}\)/);
   assert.match(app, /Retry processing/);
+  assert.match(app, /Copied!/);
+  assert.match(app, /closeProfile/);
 });
 
 test('saved sessions can be deleted with their uploaded source files', async () => {
@@ -170,7 +172,7 @@ test('billing handles subscriptions, prepaid deposits, and the UI separates save
   assert.match(webhook, /api\.stripe\.com\/v1\/subscriptions/);
   assert.match(webhook, /items\?\.data\?\.\[0\]\?\.current_period_end/);
   assert.match(app, /#saved-sessions/);
-  assert.match(app, /<details className="profile">/);
+  assert.match(app, /<details className="profile" ref=\{profileMenu\}>/);
   assert.match(app, /Overage balance/);
   assert.match(app, /Add overage funds/);
   assert.match(app, /non-expiring balance/);
