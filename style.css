@@ -699,6 +699,16 @@ footer {
 .prompt-modal .save-prompt {
   margin-top: 18px;
 }
+.redo-modal {
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+.redo-modal form {
+  margin-top: 0;
+}
+.redo-modal .note-detail {
+  margin-top: 2px;
+}
 .pricing-options { display: grid; gap: 12px; margin-top: 18px; }
 .pricing-options section { padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: #fffefa; }
 .pricing-options .paid-plan { border-color: #e7b7a5; background: #fff5f0; }

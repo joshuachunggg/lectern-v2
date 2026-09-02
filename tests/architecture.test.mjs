@@ -35,12 +35,12 @@ test('new lectures save optional note preferences', async () => {
   assert.match(app, /note_detail: noteDetail/);
   assert.match(app, /aria-label="Note depth"/);
   assert.match(app, /id="note-prompt"/);
-  assert.match(app, /Redo AI synthesis/);
   assert.match(app, /remarkPlugins=\{\[remarkGfm\]\}/);
   assert.match(app, /Math\.ceil\(indent\.length \/ 4\) \* 4/);
   assert.match(app, /synthesize_only: synthesizeOnly/);
-  assert.match(app, /Add lecture slides/);
-  assert.match(app, /function openPrompt\(session: Lecture \| null\)/);
+  assert.match(app, /Edit slides & redo notes/);
+  assert.match(app, /removedContentSources/);
+  assert.match(app, /function openPrompt\(\)/);
   assert.match(app, /from\("saved_prompts"\)/);
   assert.doesNotMatch(app, /Paste transcript/);
   assert.doesNotMatch(app, /Estimated API cost/);

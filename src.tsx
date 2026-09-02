@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { ChangeEvent, DragEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -104,6 +104,7 @@ type Lecture = {
   note_runs: number;
 };
 type SavedPrompt = { id: string; name: string; prompt: string };
+type MaterialSource = { id: string; storage_path: string; filename: string; size: number };
 type Billing = { active: boolean; included_seconds: number; overage_seconds: number; credit_cents: number; free_used: boolean; cancel_at: string | null };
 
 function App() {
@@ -140,8 +141,13 @@ function App() {
     [notePrompt, setNotePrompt] = useState(""),
     [noteDetail, setNoteDetail] = useState(4),
     [promptName, setPromptName] = useState(""),
-    [promptSession, setPromptSession] = useState<Lecture | null>(null),
     [contentSession, setContentSession] = useState<Lecture | null>(null),
+    [contentSources, setContentSources] = useState<MaterialSource[]>([]),
+    [removedContentSources, setRemovedContentSources] = useState<string[]>([]),
+    [contentFiles, setContentFiles] = useState<File[]>([]),
+    [contentText, setContentText] = useState(""),
+    [contentNotePrompt, setContentNotePrompt] = useState(""),
+    [contentNoteDetail, setContentNoteDetail] = useState(4),
     [editingTitle, setEditingTitle] = useState<string | null>(null),
     [titleDraft, setTitleDraft] = useState(""),
     [status, setStatus] = useState("Add lecture audio to begin"),
@@ -289,7 +295,7 @@ function App() {
     setStatus(message);
     let poll: ReturnType<typeof window.setInterval> | undefined;
     try {
-      await chunkStoredAudio(id);
+      if (!synthesizeOnly) await chunkStoredAudio(id);
       poll = window.setInterval(async () => {
         const { data } = await supabase
           .from("lectures")
@@ -488,39 +494,51 @@ function App() {
       setProcessing(false);
     } finally { submitting.current = false; }
   }
-  async function addToLecture(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const contentMaterialBytes = () => contentSources.filter((source) => !removedContentSources.includes(source.id)).reduce((total, source) => total + source.size, 0) + contentFiles.reduce((total, file) => total + file.size, 0) + new Blob([contentText]).size;
+  async function openContent(session: Lecture) {
+    try {
+      const { data: sources, error } = await supabase.from("lecture_sources").select("id,storage_path,filename,source_type").eq("lecture_id", session.id).eq("source_type", "material");
+      if (error) throw error;
+      const { data: stored, error: storageError } = await supabase.storage.from("lecture-files").list(session.id, { limit: 100 });
+      if (storageError) throw storageError;
+      const sizes = new Map((stored ?? []).map((file) => [file.name, Number(file.metadata?.size ?? 0)]));
+      setContentSession(session);
+      setContentSources((sources ?? []).map((source) => ({ ...source, size: sizes.get(source.storage_path.split("/").slice(1).join("/")) ?? 0 })));
+      setRemovedContentSources([]); setContentFiles([]); setContentText("");
+      setContentNotePrompt(session.synthesis_prompt ?? ""); setContentNoteDetail(session.note_detail ?? 4);
+      contentDialog.current?.showModal();
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Could not load lecture slides."); }
+  }
+  function queueContentFiles(added: File[]) {
+    const accepted = added.filter(isMaterial);
+    if (!accepted.length) return setStatus(added.some(isPowerPoint) ? "PowerPoint files aren’t supported. Export them as PDFs before uploading." : "Upload a PDF or plain-text file.");
+    if (contentMaterialBytes() + accepted.reduce((total, file) => total + file.size, 0) > MAX_COURSE_MATERIAL_BYTES) return setStatus("Lecture slides can total at most 5 MB.");
+    setContentFiles((current) => [...current, ...accepted]);
+  }
+  async function redoWithSlides() {
     if (!contentSession) return;
-    const form = event.currentTarget,
-      data = new FormData(form),
-      materialFiles = Array.from(data.getAll("materials")).filter((file): file is File => file instanceof File && file.size > 0),
-      added = [...materialFiles],
-      transcript = String(data.get("transcript") ?? "").trim();
-    if (materialFiles.some((file) => !isMaterial(file))) return setStatus(materialFiles.some(isPowerPoint) ? "PowerPoint files aren’t supported. Export them as PDFs before uploading." : "Upload a PDF or plain-text file.");
-    if (transcript)
-      added.push(
-        new File([transcript], "pasted-transcript.txt", { type: "text/plain" }),
-      );
-    if (!added.length) return;
+    if (contentMaterialBytes() > MAX_COURSE_MATERIAL_BYTES) return setStatus("Lecture slides can total at most 5 MB.");
     try {
       setProcessing(true);
-      const uploadSources = added;
-      setStatus(`Uploading sources for ${contentSession.title}…`);
-      for (const file of uploadSources) await upload(contentSession.id, file);
+      const removed = contentSources.filter((source) => removedContentSources.includes(source.id));
+      if (removed.length) {
+        const { error } = await supabase.from("lecture_sources").delete().in("id", removed.map((source) => source.id));
+        if (error) throw error;
+        await supabase.storage.from("lecture-files").remove(removed.map((source) => source.storage_path));
+      }
+      const added = [...contentFiles, ...(contentText.trim() ? [new File([contentText.trim()], "pasted-material.txt", { type: "text/plain" })] : [])];
+      setStatus(`Updating slides for ${contentSession.title}…`);
+      for (const file of added) await upload(contentSession.id, file);
+      const { error } = await supabase.from("lectures").update({ synthesis_prompt: contentNotePrompt.trim(), note_detail: contentNoteDetail }).eq("id", contentSession.id);
+      if (error) throw error;
       contentDialog.current?.close();
-      form.reset();
-      await processLecture(contentSession.id, "Sources added — rebuilding notes…");
+      await processLecture(contentSession.id, "Rebuilding study notes…", true);
     } catch (error) {
-      setStatus(
-        error instanceof Error ? error.message : "Could not upload the files.",
-      );
+      setStatus(error instanceof Error ? error.message : "Could not rebuild the notes.");
       setProcessing(false);
     }
   }
-  function openPrompt(session: Lecture | null) {
-    setPromptSession(session);
-    setNotePrompt(session?.synthesis_prompt ?? notePrompt);
-    setNoteDetail(session?.note_detail ?? noteDetail);
+  function openPrompt() {
     setPromptName("");
     promptDialog.current?.showModal();
   }
@@ -533,23 +551,6 @@ function App() {
     if (error) return setStatus(error.message);
     setPromptName("");
     await loadSavedPrompts();
-  }
-  async function redoNotes() {
-    if (!promptSession) return;
-    const session = promptSession, prompt = notePrompt.trim();
-    const { error } = await supabase
-      .from("lectures")
-      .update({ synthesis_prompt: prompt, note_detail: noteDetail })
-      .eq("id", session.id);
-    if (error) return setStatus(error.message);
-    try {
-      promptDialog.current?.close();
-      await processLecture(session.id, "Rebuilding study notes…", true);
-    } catch (error) {
-      setStatus(
-        error instanceof Error ? error.message : "Could not rebuild the notes.",
-      );
-    }
   }
   async function saveTitle(session: Lecture) {
     const title = titleDraft.trim();
@@ -822,7 +823,7 @@ function App() {
             Transcribe your lecture, then combine it with slides into structured
             notes.
           </p>
-          <button className="secondary-action" onClick={() => openPrompt(null)}>
+          <button className="secondary-action" onClick={openPrompt}>
             {notePrompt ? "Edit custom note prompt" : "Add custom note prompt"}
           </button>
           <label className="note-detail">
@@ -923,20 +924,12 @@ function App() {
                       Open notes
                     </button>
                   )}
-                  <button
-                    onClick={() => {
-                      setContentSession(session);
-                      contentDialog.current?.showModal();
-                    }}
-                  >
-                    Add lecture slides
-                  </button>
                   {session.status === "ready" && !session.notes ? (
                     <button disabled={processing} onClick={() => processLecture(session.id, "Starting transcription…").catch(() => {})}>Make study notes</button>
                   ) : session.status === "error" ? (
                     <button disabled={processing} onClick={() => processLecture(session.id, "Retrying processing…").catch(() => {})}>Retry processing</button>
                   ) : session.note_runs < 2 ? (
-                    <button onClick={() => openPrompt(session)}>Redo notes</button>
+                    <button onClick={() => openContent(session)}>Edit slides & redo notes</button>
                   ) : (
                     <button disabled>Redo already used</button>
                   )}
@@ -947,23 +940,30 @@ function App() {
           : <p className="empty-sessions">No saved sessions yet.</p>}
         </section>
       )}
-      <dialog className="modal" ref={contentDialog}>
-        <form onSubmit={addToLecture}>
+      <dialog className="modal redo-modal" ref={contentDialog}>
+        <form onSubmit={(event) => { event.preventDefault(); void redoWithSlides(); }}>
           <div className="modal-heading">
-            <h2>Add lecture slides</h2>
+            <h2>Edit slides & redo notes</h2>
             <button type="button" onClick={() => contentDialog.current?.close()}>
               Close
             </button>
           </div>
           <label>
-            Lecture slides
-            <input name="materials" type="file" accept=".pdf,.txt" multiple />
+            Add lecture slides
+            <input type="file" accept=".pdf,.txt" multiple onChange={(event) => { queueContentFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
           </label>
+          {(contentSources.filter((source) => !removedContentSources.includes(source.id)).length > 0 || contentFiles.length > 0) && <div className="file-queue material-queue"><strong>Included slides · {materialSize(contentMaterialBytes())} of 5.0 MB</strong><ul>
+            {contentSources.filter((source) => !removedContentSources.includes(source.id)).map((source) => <li key={source.id}><span className="file-details"><strong>{source.filename}</strong><small>{materialSize(source.size)}</small></span><button type="button" onClick={() => setRemovedContentSources((current) => [...current, source.id])}>Remove</button></li>)}
+            {contentFiles.map((file, index) => <li key={`${file.name}-${index}`}><span className="file-details"><strong>{file.name}</strong><small>{materialSize(file.size)}</small></span><button type="button" onClick={() => setContentFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))}>Remove</button></li>)}
+          </ul></div>}
           <label>
             Or paste slide text
-            <textarea name="transcript" maxLength={100000} placeholder="Paste additional lecture context…" />
+            <textarea value={contentText} maxLength={100000} onChange={(event) => setContentText(event.target.value)} placeholder="Paste additional lecture context…" />
           </label>
-          <button disabled={processing}>Add slides and rebuild notes</button>
+          <label>Optional note instructions<textarea value={contentNotePrompt} maxLength={MAX_PROMPT_CHARS} onChange={(event) => setContentNotePrompt(event.target.value)} placeholder="For example: prioritize exam-ready definitions and worked examples." /></label>
+          {savedPrompts.length > 0 && <div className="saved-prompts"><small>Saved prompts</small>{savedPrompts.map((prompt) => <button key={prompt.id} type="button" onClick={() => setContentNotePrompt(prompt.prompt)}>{prompt.name}</button>)}</div>}
+          <label className="note-detail"><span>Note depth <strong>{NOTE_DETAIL[contentNoteDetail - 1]}</strong></span><input aria-label="Note depth" type="range" min="1" max="5" value={contentNoteDetail} onChange={(event) => setContentNoteDetail(Number(event.target.value))} /><small>Most concise <span>Most comprehensive</span></small></label>
+          <button disabled={processing}>Redo notes</button>
         </form>
       </dialog>
       <dialog className="modal prompt-modal" ref={promptDialog}>
@@ -1002,13 +1002,7 @@ function App() {
             Save prompt
           </button>
         </div>
-        {promptSession ? (
-          <button disabled={processing} onClick={redoNotes}>
-            Redo AI synthesis
-          </button>
-        ) : (
-          <button onClick={() => promptDialog.current?.close()}>Use this prompt</button>
-        )}
+        <button onClick={() => promptDialog.current?.close()}>Use this prompt</button>
       </dialog>
       <dialog className="modal pricing-modal" ref={pricingDialog}>
         <div className="modal-heading">
