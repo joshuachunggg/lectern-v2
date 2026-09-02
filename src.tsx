@@ -147,6 +147,7 @@ function App() {
     [contentFiles, setContentFiles] = useState<File[]>([]),
     [contentText, setContentText] = useState(""),
     [contentNotePrompt, setContentNotePrompt] = useState(""),
+    [contentPromptName, setContentPromptName] = useState(""),
     [contentNoteDetail, setContentNoteDetail] = useState(4),
     [editingTitle, setEditingTitle] = useState<string | null>(null),
     [titleDraft, setTitleDraft] = useState(""),
@@ -504,7 +505,7 @@ function App() {
       const sizes = new Map((stored ?? []).map((file) => [file.name, Number(file.metadata?.size ?? 0)]));
       setContentSession(session);
       setContentSources((sources ?? []).map((source) => ({ ...source, size: sizes.get(source.storage_path.split("/").slice(1).join("/")) ?? 0 })));
-      setRemovedContentSources([]); setContentFiles([]); setContentText("");
+      setRemovedContentSources([]); setContentFiles([]); setContentText(""); setContentPromptName("");
       setContentNotePrompt(session.synthesis_prompt ?? ""); setContentNoteDetail(session.note_detail ?? 4);
       contentDialog.current?.showModal();
     } catch (error) { setStatus(error instanceof Error ? error.message : "Could not load lecture slides."); }
@@ -542,14 +543,14 @@ function App() {
     setPromptName("");
     promptDialog.current?.showModal();
   }
-  async function savePrompt() {
-    const name = promptName.trim(), prompt = notePrompt.trim();
+  async function savePrompt(nameValue: string, promptValue: string, clear: () => void) {
+    const name = nameValue.trim(), prompt = promptValue.trim();
     if (!name || !prompt) return;
     if (prompt.length > MAX_PROMPT_CHARS)
       return setStatus("Custom note preferences are limited to 1,500 characters.");
     const { error } = await supabase.from("saved_prompts").insert({ name, prompt });
     if (error) return setStatus(error.message);
-    setPromptName("");
+    clear();
     await loadSavedPrompts();
   }
   async function saveTitle(session: Lecture) {
@@ -962,6 +963,7 @@ function App() {
           </label>
           <label>Optional note instructions<textarea value={contentNotePrompt} maxLength={MAX_PROMPT_CHARS} onChange={(event) => setContentNotePrompt(event.target.value)} placeholder="For example: prioritize exam-ready definitions and worked examples." /></label>
           {savedPrompts.length > 0 && <div className="saved-prompts"><small>Saved prompts</small>{savedPrompts.map((prompt) => <button key={prompt.id} type="button" onClick={() => setContentNotePrompt(prompt.prompt)}>{prompt.name}</button>)}</div>}
+          <div className="save-prompt"><input value={contentPromptName} onChange={(event) => setContentPromptName(event.target.value)} placeholder="Name this prompt" maxLength={100} /><button type="button" onClick={() => void savePrompt(contentPromptName, contentNotePrompt, () => setContentPromptName(""))} disabled={!contentPromptName.trim() || !contentNotePrompt.trim()}>Save prompt</button></div>
           <label className="note-detail"><span>Note depth <strong>{NOTE_DETAIL[contentNoteDetail - 1]}</strong></span><input aria-label="Note depth" type="range" min="1" max="5" value={contentNoteDetail} onChange={(event) => setContentNoteDetail(Number(event.target.value))} /><small>Most concise <span>Most comprehensive</span></small></label>
           <button disabled={processing}>Redo notes</button>
         </form>
@@ -998,7 +1000,7 @@ function App() {
             placeholder="Name this prompt"
             maxLength={100}
           />
-          <button type="button" onClick={savePrompt} disabled={!promptName.trim() || !notePrompt.trim()}>
+          <button type="button" onClick={() => void savePrompt(promptName, notePrompt, () => setPromptName(""))} disabled={!promptName.trim() || !notePrompt.trim()}>
             Save prompt
           </button>
         </div>
