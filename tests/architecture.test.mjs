@@ -195,6 +195,7 @@ test('only the backend can set billing and processing fields', async () => {
   assert.match(worker, /lecture\.billed_seconds !== null/);
   assert.match(worker, /Upload lecture audio before making study notes/);
   assert.match(worker, /result\.usage\?\.seconds/);
+  assert.match(worker, /Math\.ceil\(Number\(\(result\.usage as any\)\.seconds\)\)/);
   assert.match(worker, /claim_note_run/);
   assert.match(worker, /release_note_run/);
   assert.match(worker, /const errorMessage/);

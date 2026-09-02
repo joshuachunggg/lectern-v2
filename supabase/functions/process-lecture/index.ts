@@ -70,7 +70,7 @@ Deno.serve(async request => {
       if (source.source_type === 'audio') {
         const { data: audioUrl } = transcriptionProvider === 'groq' ? await admin.storage.from('lecture-files').createSignedUrl(source.storage_path, 3600) : { data: null };
         const { data: file, error } = audioUrl ? { data: null, error: null } : await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file && !audioUrl) throw new Error(error ? errorMessage(error) : `Could not download ${source.filename}.`);
-        const result = await transcribe(file, source.filename, audioUrl?.signedUrl); const seconds = Number((result.usage as any).seconds); transcripts.push(result.text); audioSeconds += seconds; transcriptionUsage.push(result.usage); estimatedCost += result.cost;
+        const result = await transcribe(file, source.filename, audioUrl?.signedUrl); const seconds = Math.ceil(Number((result.usage as any).seconds)); if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Transcription provider returned an invalid audio duration.'); transcripts.push(result.text); audioSeconds += seconds; transcriptionUsage.push(result.usage); estimatedCost += result.cost;
         const { error: sourceError } = await admin.from('lecture_sources').update({ transcript: result.text, duration_seconds: seconds }).eq('id', source.id); if (sourceError) throw new Error(errorMessage(sourceError));
         const { error: lectureError } = await admin.from('lectures').update({ transcript: transcripts.join('\n\n'), api_usage: { ...lecture.api_usage, transcription: transcriptionUsage }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id); if (lectureError) throw new Error(errorMessage(lectureError));
       }
