@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const openai = (path: string, init: RequestInit) => fetch(`https://api.openai.com/v1${path}`, { ...init, headers: { Authorization: `Bearer ${Deno.env.get('OPENAI_API_KEY')}`, ...init.headers } });
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 const fail = (message: string) => new Response(JSON.stringify({ error: message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error && typeof error.message === 'string' ? error.message : 'Processing failed.';
 const transcriptionCost = (usage: any) => ((usage?.input_tokens ?? 0) * 1.25 + (usage?.output_tokens ?? 0) * 5) / 1_000_000;
 const notesCost = (usage: any) => { const cached = usage?.input_tokens_details?.cached_tokens ?? 0; return (((usage?.input_tokens ?? 0) - cached) * .4 + cached * .1 + (usage?.output_tokens ?? 0) * 1.6) / 1_000_000; };
 const allowedAudio = new Set(['mp3', 'm4a', 'wav', 'webm', 'ogg', 'aac', 'flac']);
@@ -49,6 +50,7 @@ Deno.serve(async request => {
   const { data: lecture } = await admin.from('lectures').select('*').eq('id', lecture_id).eq('owner_id', user.id).single(); if (!lecture) return fail('Lecture not found.');
   if (lecture.deleted_at) return fail('Restore this lecture before processing it.');
   const { data: sources } = await admin.from('lecture_sources').select('*').eq('lecture_id', lecture_id).order('created_at');
+  let noteRunClaimed = false;
   try {
     if (!sources?.some(source => source.source_type === 'audio')) throw new Error('Upload lecture audio before making study notes.');
     if (!synthesize_only && lecture.billed_seconds !== null && sources?.some(source => source.source_type === 'audio' && !source.transcript)) throw new Error('Create a new lecture to add audio after processing has finished.');
@@ -59,6 +61,7 @@ Deno.serve(async request => {
     }
     const { error: noteRunError } = await admin.rpc('claim_note_run', { p_lecture_id: lecture_id, p_owner_id: user.id, p_synthesize_only: synthesize_only });
     if (noteRunError) throw new Error(noteRunError.message);
+    noteRunClaimed = true;
     if (!synthesize_only) await admin.from('lectures').update({ status: 'transcribing', status_message: 'Transcribing lecture…' }).eq('id', lecture_id);
     const transcripts: string[] = [], materials: string[] = [], files: { type: 'input_file'; file_data: string; filename: string }[] = [], transcriptionUsage: unknown[] = lecture.api_usage?.transcription ?? []; let estimatedCost = Number(lecture.estimated_cost_usd ?? 0), audioSeconds = 0;
     for (const source of sources ?? []) {
@@ -66,13 +69,13 @@ Deno.serve(async request => {
       if (source.source_type === 'audio' && source.transcript) { transcripts.push(source.transcript); audioSeconds += source.duration_seconds ?? 0; continue; }
       if (source.source_type === 'audio') {
         const { data: audioUrl } = transcriptionProvider === 'groq' ? await admin.storage.from('lecture-files').createSignedUrl(source.storage_path, 3600) : { data: null };
-        const { data: file, error } = audioUrl ? { data: null, error: null } : await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file && !audioUrl) throw error ?? new Error(`Could not download ${source.filename}.`);
+        const { data: file, error } = audioUrl ? { data: null, error: null } : await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file && !audioUrl) throw new Error(error ? errorMessage(error) : `Could not download ${source.filename}.`);
         const result = await transcribe(file, source.filename, audioUrl?.signedUrl); const seconds = Number((result.usage as any).seconds); transcripts.push(result.text); audioSeconds += seconds; transcriptionUsage.push(result.usage); estimatedCost += result.cost;
-        const { error: sourceError } = await admin.from('lecture_sources').update({ transcript: result.text, duration_seconds: seconds }).eq('id', source.id); if (sourceError) throw sourceError;
-        const { error: lectureError } = await admin.from('lectures').update({ transcript: transcripts.join('\n\n'), api_usage: { ...lecture.api_usage, transcription: transcriptionUsage }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id); if (lectureError) throw lectureError;
+        const { error: sourceError } = await admin.from('lecture_sources').update({ transcript: result.text, duration_seconds: seconds }).eq('id', source.id); if (sourceError) throw new Error(errorMessage(sourceError));
+        const { error: lectureError } = await admin.from('lectures').update({ transcript: transcripts.join('\n\n'), api_usage: { ...lecture.api_usage, transcription: transcriptionUsage }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id); if (lectureError) throw new Error(errorMessage(lectureError));
       }
       else {
-        const { data: file, error } = await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file) throw error ?? new Error(`Could not download ${source.filename}.`);
+        const { data: file, error } = await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file) throw new Error(error ? errorMessage(error) : `Could not download ${source.filename}.`);
         if (lecture.slide_mode === 'original' || !source.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: `data:${source.content_type};base64,${base64(new Uint8Array(await file.arrayBuffer()))}`, filename: source.filename });
         else { const text = await file.text(); if (text.length > 100_000) throw new Error('Text materials must be 100,000 characters or fewer.'); materials.push(`## ${source.filename}\n${text}`); }
       }
@@ -91,5 +94,5 @@ Deno.serve(async request => {
     if (!notes) throw new Error(`Note synthesis returned no text${result.incomplete_details?.reason ? ` (${result.incomplete_details.reason})` : ''}.`);
     await admin.from('lectures').update({ status: 'done', status_message: 'Study notes are ready.', notes, api_usage: { transcription: transcriptionUsage, notes: result.usage ?? {} }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id);
     return Response.json({ status: 'done' }, { headers: corsHeaders });
-  } catch (error) { const message = error instanceof Error ? error.message : 'Processing failed.'; if (!synthesize_only) await admin.rpc('release_lecture_reservation', { p_lecture_id: lecture_id, p_owner_id: user.id }); await admin.from('lectures').update({ status: 'error', status_message: message }).eq('id', lecture_id); return fail(message); }
+  } catch (error) { const message = errorMessage(error); console.error({ lecture_id, message }); if (noteRunClaimed) await admin.rpc('release_note_run', { p_lecture_id: lecture_id, p_owner_id: user.id }); if (!synthesize_only) await admin.rpc('release_lecture_reservation', { p_lecture_id: lecture_id, p_owner_id: user.id }); await admin.from('lectures').update({ status: 'error', status_message: message }).eq('id', lecture_id); return fail(message); }
 });

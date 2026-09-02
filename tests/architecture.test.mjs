@@ -196,6 +196,8 @@ test('only the backend can set billing and processing fields', async () => {
   assert.match(worker, /Upload lecture audio before making study notes/);
   assert.match(worker, /result\.usage\?\.seconds/);
   assert.match(worker, /claim_note_run/);
+  assert.match(worker, /release_note_run/);
+  assert.match(worker, /const errorMessage/);
   assert.match(billing, /Idempotency-Key/);
   assert.match(billing, /Billing setup is already in progress/);
   assert.match(billing, /new Date\(account\.period_end\) > new Date\(\)/);
