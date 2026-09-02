@@ -47,6 +47,7 @@ Deno.serve(async request => {
   const { data: { user } } = await userClient.auth.getUser(); const { lecture_id, synthesize_only } = await request.json();
   if (!user || typeof lecture_id !== 'string' || typeof synthesize_only !== 'undefined' && typeof synthesize_only !== 'boolean') return fail('Invalid lecture.');
   const { data: lecture } = await admin.from('lectures').select('*').eq('id', lecture_id).eq('owner_id', user.id).single(); if (!lecture) return fail('Lecture not found.');
+  if (lecture.deleted_at) return fail('Restore this lecture before processing it.');
   const { data: sources } = await admin.from('lecture_sources').select('*').eq('lecture_id', lecture_id).order('created_at');
   try {
     if (!sources?.some(source => source.source_type === 'audio')) throw new Error('Upload lecture audio before making study notes.');

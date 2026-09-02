@@ -102,6 +102,7 @@ type Lecture = {
   synthesis_prompt: string;
   note_detail: number;
   note_runs: number;
+  deleted_at: string | null;
 };
 type SavedPrompt = { id: string; name: string; prompt: string };
 type MaterialSource = { id: string; storage_path: string; filename: string; size: number };
@@ -571,27 +572,23 @@ function App() {
     setEditingTitle(null);
   }
   async function deleteLecture(session: Lecture) {
-    if (!window.confirm(`Delete “${session.title}” and its source files?`))
+    if (!window.confirm(`Move “${session.title}” to Recently deleted? You can restore it for 30 days.`))
       return;
-    const { data: sources, error: sourcesError } = await supabase
-      .from("lecture_sources")
-      .select("storage_path")
-      .eq("lecture_id", session.id);
-    if (sourcesError) return setStatus(sourcesError.message);
-    const paths = sources.map((source) => source.storage_path);
-    if (paths.length) {
-      const { error } = await supabase.storage.from("lecture-files").remove(paths);
-      if (error) return setStatus(error.message);
-    }
-    const { error } = await supabase.from("lectures").delete().eq("id", session.id);
+    const { error } = await supabase.from("lectures").update({ deleted_at: new Date().toISOString() }).eq("id", session.id);
     if (error) return setStatus(error.message);
     setNotes("");
-    setStatus(`Deleted ${session.title}.`);
+    setStatus(`Moved ${session.title} to Recently deleted.`);
     await loadLectures();
   }
-  const canProcess = Boolean(
-    audio || audioFiles.length || files.length || materials.trim(),
-  );
+  async function restoreLecture(session: Lecture) {
+    const { error } = await supabase.from("lectures").update({ deleted_at: null }).eq("id", session.id);
+    if (error) return setStatus(error.message);
+    setStatus(`Restored ${session.title}.`);
+    await loadLectures();
+  }
+  const canProcess = Boolean(audio || audioFiles.length);
+  const activeLectures = lectures.filter((session) => !session.deleted_at);
+  const recentlyDeleted = lectures.filter((session) => session.deleted_at && Date.now() - new Date(session.deleted_at).getTime() < 30 * 24 * 60 * 60 * 1000);
   const courseMaterialBytes = files.reduce((total, file) => total + file.size, 0);
   const stage =
     status.includes("Uploading") ||
@@ -868,8 +865,8 @@ function App() {
           </button>
           <small>
             {canProcess
-              ? "Your source material is ready."
-              : "Upload audio or add lecture slides to continue."}
+              ? "Your lecture audio is ready."
+              : "Upload lecture audio to continue."}
           </small>
         </article>
       </section>
@@ -877,8 +874,8 @@ function App() {
       {page === "saved" && (
         <section className="history" id="saved-sessions">
           <p className="eyebrow">Saved sessions</p>
-          {lectures.length ? <div className="saved-session-list">
-            {lectures.map((session) => (
+          {activeLectures.length ? <div className="saved-session-list">
+            {activeLectures.map((session) => (
               <article className="saved-session" key={session.id}>
                 <button
                   className="delete-session"
@@ -933,6 +930,8 @@ function App() {
                   )}
                   {session.status === "ready" && !session.notes ? (
                     <button disabled={processing} onClick={() => processLecture(session.id, "Starting transcription…").catch(() => {})}>Make study notes</button>
+                  ) : session.status === "error" && session.status_message === "Upload lecture audio before making study notes." ? (
+                    <button disabled>Audio required</button>
                   ) : session.status === "error" ? (
                     <button disabled={processing} onClick={() => processLecture(session.id, "Retrying processing…").catch(() => {})}>Retry processing</button>
                   ) : session.note_runs < 2 ? (
@@ -945,6 +944,7 @@ function App() {
             ))}
           </div>
           : <p className="empty-sessions">No saved sessions yet.</p>}
+          {recentlyDeleted.length > 0 && <details className="recently-deleted"><summary>Recently deleted ({recentlyDeleted.length})</summary>{recentlyDeleted.map((session) => <div key={session.id}><span>{session.title}</span><button onClick={() => restoreLecture(session)}>Restore</button></div>)}</details>}
         </section>
       )}
       <dialog className="modal redo-modal" ref={contentDialog}>

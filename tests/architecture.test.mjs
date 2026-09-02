@@ -91,12 +91,15 @@ test('processing resumes from completed source transcriptions', async () => {
 
 test('saved sessions can be deleted with their uploaded source files', async () => {
   const app = await readFile('src.tsx', 'utf8');
+  const softDeleteMigration = await readFile('supabase/migrations/20260902000000_soft_delete_lectures.sql', 'utf8');
   assert.match(app, /async function deleteLecture/);
   assert.match(app, /async function saveRecording/);
   assert.match(app, /Recording saved — continue from Saved sessions\./);
   assert.match(app, /Make study notes/);
-  assert.match(app, /from\("lecture-files"\)\.remove\(paths\)/);
-  assert.match(app, /from\("lectures"\)\.delete\(\)\.eq\("id", session\.id\)/);
+  assert.match(app, /deleted_at: new Date\(\)\.toISOString\(\)/);
+  assert.match(app, /async function restoreLecture/);
+  assert.match(app, /Recently deleted/);
+  assert.match(softDeleteMigration, /add column deleted_at/);
   assert.match(app, /aria-label=\{`Delete \$\{session\.title\}`\}/);
 });
 

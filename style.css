@@ -484,6 +484,10 @@ footer {
   margin: 76px 0 34px;
 }
 .empty-sessions { color: #526061; }
+.recently-deleted { margin-top: 20px; color: #526061; }
+.recently-deleted summary { cursor: pointer; font-weight: bold; }
+.recently-deleted > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fffefa; }
+.recently-deleted button { padding: 6px 9px; font-size: 12px; }
 .saved-session-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 280px));
