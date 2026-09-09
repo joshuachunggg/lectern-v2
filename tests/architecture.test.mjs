@@ -213,6 +213,7 @@ test('recorded and uploaded audio is capped at a lecture length and prepared for
   assert.match(app, /Number\.isFinite\(audio\.duration\)/);
   assert.match(app, /audio\.currentTime = 1e101/);
   assert.match(app, /new AudioContext\(\{ sampleRate: 16000 \}\)/);
+  assert.match(app, /is too large for Lectern to split in this browser/);
   assert.match(app, /0x52494646/);
   assert.match(app, /repairWav/);
   assert.match(app, /chunkAudio\(file\)/);
