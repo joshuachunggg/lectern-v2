@@ -78,7 +78,7 @@ test('edge function accepts browser CORS preflights', async () => {
 test('slide files use an Edge-compatible base64 encoder', async () => {
   const worker = await readFile('supabase/functions/process-lecture/index.ts', 'utf8');
   assert.match(worker, /const base64 = \(bytes: Uint8Array\)/);
-  assert.match(worker, /file_data: `data:\$\{source\.content_type\};base64,\$\{base64\(new Uint8Array\(await file\.arrayBuffer\(\)\)\)\}`/);
+  assert.match(worker, /file_data: `data:\$\{material\.content_type\};base64,\$\{base64\(new Uint8Array\(await file\.arrayBuffer\(\)\)\)\}`/);
   assert.doesNotMatch(worker, /\.toBase64\(\)/);
 });
 
@@ -234,6 +234,8 @@ test('free users can compare plans and view finished transcripts', async () => {
   assert.match(app, /audio hours remaining/);
   assert.match(app, /Show transcript/);
   assert.match(app, /Copy transcript/);
+  assert.match(app, /"text\/html": new Blob\(\[html\]/);
+  assert.match(app, /<pre>\$\{text\.replace/);
   assert.match(app, /select\("notes,status_message,transcript"\)/);
 });
 
@@ -253,8 +255,8 @@ test('lecture slides can be selected before processing', async () => {
   assert.match(app, /function queueMaterials/);
   assert.match(app, /Drop lecture slides here/);
   assert.match(app, /function removeMaterial/);
-  assert.match(app, /PowerPoint files aren’t supported\. Export them as PDFs before uploading\./);
-  assert.match(app, /accept="\.pdf,\.txt"/);
+  assert.match(app, /\["pdf", "pptx", "txt"\]/);
+  assert.match(app, /accept="\.pdf,\.pptx,\.txt"/);
   assert.match(app, /function dropMaterials/);
   assert.match(app, /onDrop=\{dropMaterials\}/);
   assert.match(app, /is-dragging/);
@@ -262,4 +264,13 @@ test('lecture slides can be selected before processing', async () => {
   assert.match(app, /status === "Study notes are ready\."/);
   assert.match(style, /\.file-queue ul \{ display: grid; gap: 7px; max-height: 136px;/);
   assert.doesNotMatch(style, /^ul \{/m);
+});
+
+test('PowerPoint sources are converted to PDFs in the backend', async () => {
+  const worker = await readFile('supabase/functions/process-lecture/index.ts', 'utf8');
+  assert.match(worker, /sync\.api\.cloudconvert\.com\/v2/);
+  assert.match(worker, /CLOUDCONVERT_API_KEY/);
+  assert.match(worker, /output_format: 'pdf'/);
+  assert.match(worker, /extension\(source\.filename\) === 'pptx' \? await convertPowerPoint/);
+  assert.match(worker, /content_type: 'application\/pdf'/);
 });

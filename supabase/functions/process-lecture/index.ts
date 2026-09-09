@@ -16,6 +16,27 @@ const noteDepth = [
   'Be exhaustive: capture every teachable detail from the transcript and slides, including minor points, examples, caveats, and instructor emphasis.',
 ];
 const extension = (name: string) => name.toLowerCase().split('.').pop() ?? '';
+const cloudConvert = async (path: string, init: RequestInit) => {
+  const response = await fetch(`https://sync.api.cloudconvert.com/v2${path}`, { ...init, headers: { Authorization: `Bearer ${Deno.env.get('CLOUDCONVERT_API_KEY')}`, ...init.headers } });
+  if (!response.ok) throw new Error(`PowerPoint conversion failed: ${await response.text()}`);
+  return response.json();
+};
+const convertPowerPoint = async (admin: ReturnType<typeof createClient>, source: any) => {
+  const key = Deno.env.get('CLOUDCONVERT_API_KEY'); if (!key) throw new Error('PowerPoint uploads require CLOUDCONVERT_API_KEY.');
+  const { data: signed, error: signedError } = await admin.storage.from('lecture-files').createSignedUrl(source.storage_path, 600);
+  if (signedError || !signed) throw signedError ?? new Error(`Could not download ${source.filename}.`);
+  const job = await cloudConvert('/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tasks: { import: { operation: 'import/url', url: signed.signedUrl, filename: source.filename }, convert: { operation: 'convert', input: 'import', input_format: 'pptx', output_format: 'pdf' }, export: { operation: 'export/url', input: 'convert' } } }) });
+  const output = job.data?.tasks?.find((task: any) => task.name === 'export')?.result?.files?.[0];
+  if (!output?.url) throw new Error('PowerPoint conversion returned no PDF.');
+  const pdf = await fetch(output.url); if (!pdf.ok) throw new Error('Could not download converted PDF.');
+  const storage_path = source.storage_path.replace(/\.pptx$/i, '.pdf'), filename = source.filename.replace(/\.pptx$/i, '.pdf');
+  const { error: uploadError } = await admin.storage.from('lecture-files').upload(storage_path, await pdf.blob(), { contentType: 'application/pdf' });
+  if (uploadError) throw uploadError;
+  const { error: updateError } = await admin.from('lecture_sources').update({ storage_path, filename, content_type: 'application/pdf' }).eq('id', source.id);
+  if (updateError) throw updateError;
+  await admin.storage.from('lecture-files').remove([source.storage_path]);
+  return { ...source, storage_path, filename, content_type: 'application/pdf' };
+};
 const base64 = (bytes: Uint8Array) => {
   let binary = ''; for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(binary);
@@ -75,9 +96,10 @@ Deno.serve(async request => {
         const { error: lectureError } = await admin.from('lectures').update({ transcript: transcripts.join('\n\n'), api_usage: { ...lecture.api_usage, transcription: transcriptionUsage }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id); if (lectureError) throw new Error(errorMessage(lectureError));
       }
       else {
-        const { data: file, error } = await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file) throw new Error(error ? errorMessage(error) : `Could not download ${source.filename}.`);
-        if (lecture.slide_mode === 'original' || !source.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: `data:${source.content_type};base64,${base64(new Uint8Array(await file.arrayBuffer()))}`, filename: source.filename });
-        else { const text = await file.text(); if (text.length > 100_000) throw new Error('Text materials must be 100,000 characters or fewer.'); materials.push(`## ${source.filename}\n${text}`); }
+        const material = extension(source.filename) === 'pptx' ? await convertPowerPoint(admin, source) : source;
+        const { data: file, error } = await admin.storage.from('lecture-files').download(material.storage_path); if (error || !file) throw new Error(error ? errorMessage(error) : `Could not download ${material.filename}.`);
+        if (lecture.slide_mode === 'original' || !material.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: `data:${material.content_type};base64,${base64(new Uint8Array(await file.arrayBuffer()))}`, filename: material.filename });
+        else { const text = await file.text(); if (text.length > 100_000) throw new Error('Text materials must be 100,000 characters or fewer.'); materials.push(`## ${material.filename}\n${text}`); }
       }
     }
     if (!synthesize_only) {

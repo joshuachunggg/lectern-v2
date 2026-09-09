@@ -66,8 +66,8 @@ const audioDuration = (file: File) => new Promise<number>((resolve, reject) => {
   audio.src = url;
 });
 const isAudio = (file: File) => AUDIO_EXTENSIONS.has(file.name.toLowerCase().split(".").pop() ?? "");
-const isMaterial = (file: File) => ["pdf", "txt"].includes(file.name.toLowerCase().split(".").pop() ?? "");
-const isPowerPoint = (file: File) => ["ppt", "pptx"].includes(file.name.toLowerCase().split(".").pop() ?? "");
+const isMaterial = (file: File) => ["pdf", "pptx", "txt"].includes(file.name.toLowerCase().split(".").pop() ?? "");
+const isPowerPoint = (file: File) => file.name.toLowerCase().endsWith(".ppt");
 const wavHeader = (samples: number) => {
   const bytes = new ArrayBuffer(44), view = new DataView(bytes);
   view.setUint32(0, 0x52494646, false); view.setUint32(4, 36 + samples * 2, true); view.setUint32(8, 0x57415645, false); view.setUint32(12, 0x666d7420, false); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, 16000, true); view.setUint32(28, 32000, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); view.setUint32(36, 0x64617461, false); view.setUint32(40, samples * 2, true);
@@ -252,12 +252,14 @@ function App() {
     setShowTranscript(false);
     setNotes(session.notes ?? "");
   };
-  const copyToClipboard = (text: string, message: string) =>
-    navigator.clipboard.writeText(text).then(() => {
-      setStatus(message); setCopied(true);
-      if (copyTimer.current) clearTimeout(copyTimer.current);
-      copyTimer.current = setTimeout(() => setCopied(false), 1400);
-    });
+  const copyToClipboard = async (text: string, message: string) => {
+    const html = `<pre>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
+    if (window.ClipboardItem) await navigator.clipboard.write([new ClipboardItem({ "text/plain": new Blob([text], { type: "text/plain" }), "text/html": new Blob([html], { type: "text/html" }) })]);
+    else await navigator.clipboard.writeText(text);
+    setStatus(message); setCopied(true);
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(false), 1400);
+  };
   async function addOverageFunds() {
     const creditCents = Math.round(Number(creditAmount) * 100);
     if (!/^\d+(?:\.\d{1,2})?$/.test(creditAmount) || creditCents < 50 || creditCents > 10_000) return setStatus("Enter an amount from $0.50 to $100.00.");
@@ -404,14 +406,14 @@ function App() {
   }
   function queueMaterials(added: File[]) {
     const accepted = added.filter(isMaterial), rejected = added.filter((file) => !isMaterial(file));
-    if (!accepted.length) return setStatus(rejected.some(isPowerPoint) ? "PowerPoint files aren’t supported. Export them as PDFs before uploading." : "Upload a PDF or plain-text file.");
+    if (!accepted.length) return setStatus(rejected.some(isPowerPoint) ? "Upload PowerPoint files as .pptx." : "Upload a PDF, PowerPoint, or plain-text file.");
     setFiles((current) => {
       const next = [...current, ...accepted];
       if (next.reduce((total, file) => total + file.size, 0) > MAX_COURSE_MATERIAL_BYTES) {
         setStatus("Lecture slides can total at most 5 MB.");
         return current;
       }
-      setStatus(`${accepted.length} slide file${accepted.length === 1 ? "" : "s"} ready${rejected.length ? " — export PowerPoint files as PDFs before uploading." : ""}`);
+      setStatus(`${accepted.length} slide file${accepted.length === 1 ? "" : "s"} ready${rejected.length ? " — PowerPoint files must use .pptx." : ""}`);
       return next;
     });
   }
@@ -533,7 +535,7 @@ function App() {
   }
   function queueContentFiles(added: File[]) {
     const accepted = added.filter(isMaterial);
-    if (!accepted.length) return setStatus(added.some(isPowerPoint) ? "PowerPoint files aren’t supported. Export them as PDFs before uploading." : "Upload a PDF or plain-text file.");
+    if (!accepted.length) return setStatus(added.some(isPowerPoint) ? "Upload PowerPoint files as .pptx." : "Upload a PDF, PowerPoint, or plain-text file.");
     if (contentMaterialBytes() + accepted.reduce((total, file) => total + file.size, 0) > MAX_COURSE_MATERIAL_BYTES) return setStatus("Lecture slides can total at most 5 MB.");
     setContentFiles((current) => [...current, ...accepted]);
   }
@@ -791,13 +793,13 @@ function App() {
             <label className={`material-dropzone${draggingMaterials ? " is-dragging" : ""}`} onDragEnter={() => setDraggingMaterials(true)} onDragOver={(event) => event.preventDefault()} onDragLeave={leaveMaterialDropzone} onDrop={dropMaterials}>
               <input
                 type="file"
-                accept=".pdf,.txt"
+                accept=".pdf,.pptx,.txt"
                 multiple
                 onChange={addFiles}
               />
               <span aria-hidden="true">▤</span>
               <strong>Drop lecture slides here</strong>
-              <small>or choose a PDF or plain-text slide notes</small>
+              <small>or choose PDF, PowerPoint, or plain text</small>
             </label>
             <label className="materials-label">
               <input
@@ -971,7 +973,7 @@ function App() {
           </div>
           <label>
             Add lecture slides
-            <input type="file" accept=".pdf,.txt" multiple onChange={(event) => { queueContentFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
+            <input type="file" accept=".pdf,.pptx,.txt" multiple onChange={(event) => { queueContentFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
           </label>
           {(contentSources.filter((source) => !removedContentSources.includes(source.id)).length > 0 || contentFiles.length > 0) && <div className="file-queue material-queue"><strong>Included slides · {materialSize(contentMaterialBytes())} of 5.0 MB</strong><ul>
             {contentSources.filter((source) => !removedContentSources.includes(source.id)).map((source) => <li key={source.id}><span className="file-details"><strong>{source.filename}</strong><small>{materialSize(source.size)}</small></span><button type="button" onClick={() => setRemovedContentSources((current) => [...current, source.id])}>Remove</button></li>)}

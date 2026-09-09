@@ -6,7 +6,7 @@ Cloud version of Lectern. The original local v1 remains separate and unchanged.
 
 1. Create or select a Supabase project, then run `supabase link --project-ref YOUR_REF` and `supabase db push`.
 2. In Stripe, create a $10/month recurring price and configure the Stripe customer portal. The plan includes 30 audio hours monthly; additional audio costs $0.50/hour from a prepaid $0.50–$100 balance.
-3. Set Edge Function secrets: `supabase secrets set OPENAI_API_KEY=... STRIPE_SECRET_KEY=... STRIPE_BASE_PRICE_ID=price_... STRIPE_WEBHOOK_SECRET=whsec_...`.
+3. Set Edge Function secrets: `supabase secrets set OPENAI_API_KEY=... CLOUDCONVERT_API_KEY=... STRIPE_SECRET_KEY=... STRIPE_BASE_PRICE_ID=price_... STRIPE_WEBHOOK_SECRET=whsec_...`. PowerPoint uploads are converted to PDF by CloudConvert before note synthesis.
 4. Deploy the functions: `supabase functions deploy process-lecture billing stripe-webhook`.
 5. Add a Stripe webhook endpoint at `https://YOUR_PROJECT.supabase.co/functions/v1/stripe-webhook` for `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, and `invoice.paid`.
 4. Copy `.env.example` to `.env.local`, add the project URL and publishable key, then run `npm install && npm run dev`.
@@ -19,4 +19,4 @@ The browser uploads to private Supabase Storage, Supabase Auth/RLS enforces owne
 
 OpenAI remains the default. To test Groq Whisper Large V3, set `GROQ_API_KEY=... TRANSCRIPTION_PROVIDER=groq` with `supabase secrets set`, then redeploy `process-lecture`. Revert by setting `TRANSCRIPTION_PROVIDER=openai` and redeploying; no data migration or code change is involved.
 
-Text materials are supported in this first cloud slice. PDF/PPTX extraction is intentionally deferred until the core cloud pipeline is live.
+Course materials support PDF, PPTX, and plain text. PPTX files are replaced with PDFs in private storage during backend processing.
