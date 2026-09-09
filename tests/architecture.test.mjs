@@ -235,7 +235,8 @@ test('free users can compare plans and view finished transcripts', async () => {
   assert.match(app, /Show transcript/);
   assert.match(app, /Copy transcript/);
   assert.match(app, /"text\/html": new Blob\(\[html\]/);
-  assert.match(app, /<pre>\$\{text\.replace/);
+  assert.match(app, /notesContent\.current\?\.innerHTML/);
+  assert.match(app, /<article className="notes-content" ref=\{notesContent\}>/);
   assert.match(app, /select\("notes,status_message,transcript"\)/);
 });
 

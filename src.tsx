@@ -115,6 +115,7 @@ function App() {
     copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
     profileMenu = useRef<HTMLDetailsElement | null>(null),
     notesDialog = useRef<HTMLDialogElement | null>(null),
+    notesContent = useRef<HTMLElement | null>(null),
     contentDialog = useRef<HTMLDialogElement | null>(null),
     promptDialog = useRef<HTMLDialogElement | null>(null),
     pricingDialog = useRef<HTMLDialogElement | null>(null),
@@ -252,8 +253,7 @@ function App() {
     setShowTranscript(false);
     setNotes(session.notes ?? "");
   };
-  const copyToClipboard = async (text: string, message: string) => {
-    const html = `<pre>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
+  const copyToClipboard = async (text: string, message: string, html = `<pre>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`) => {
     if (window.ClipboardItem) await navigator.clipboard.write([new ClipboardItem({ "text/plain": new Blob([text], { type: "text/plain" }), "text/html": new Blob([html], { type: "text/html" }) })]);
     else await navigator.clipboard.writeText(text);
     setStatus(message); setCopied(true);
@@ -1051,11 +1051,11 @@ function App() {
             <p className="eyebrow">Study notes</p>
             <div>
               {transcript && <button onClick={() => setShowTranscript((value) => !value)}>{showTranscript ? "Show notes" : "Show transcript"}</button>}
-              <span className="copy-control"><button onClick={() => copyToClipboard(showTranscript ? transcript : notes.replace(/^( +)([-*+]|\d+[.)]) /gm, (_, indent, marker) => `${" ".repeat(Math.ceil(indent.length / 4) * 4)}${marker} `).replace(/[ \t]+$/gm, ""), showTranscript ? "Transcript copied to clipboard." : "Notes copied to clipboard.")}>{showTranscript ? "Copy transcript" : "Copy all"}</button>{copied && <span className="copied-confirmation" role="status">Copied!</span>}</span>
+              <span className="copy-control"><button onClick={() => copyToClipboard(showTranscript ? transcript : notes.replace(/^( +)([-*+]|\d+[.)]) /gm, (_, indent, marker) => `${" ".repeat(Math.ceil(indent.length / 4) * 4)}${marker} `).replace(/[ \t]+$/gm, ""), showTranscript ? "Transcript copied to clipboard." : "Notes copied to clipboard.", showTranscript ? undefined : notesContent.current?.innerHTML)}>{showTranscript ? "Copy transcript" : "Copy all"}</button>{copied && <span className="copied-confirmation" role="status">Copied!</span>}</span>
               <button onClick={() => setNotes("")}>Close</button>
             </div>
           </div>
-          {showTranscript ? <pre className="transcript-content">{transcript}</pre> : <article className="notes-content"><ReactMarkdown remarkPlugins={[remarkGfm]}>{notes}</ReactMarkdown></article>}
+          {showTranscript ? <pre className="transcript-content">{transcript}</pre> : <article className="notes-content" ref={notesContent}><ReactMarkdown remarkPlugins={[remarkGfm]}>{notes}</ReactMarkdown></article>}
         </dialog>
       )}
       <footer>
