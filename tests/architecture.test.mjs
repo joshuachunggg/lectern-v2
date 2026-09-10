@@ -209,15 +209,9 @@ test('only the backend can set billing and processing fields', async () => {
 test('recorded and uploaded audio is capped at a lecture length and prepared for transcription', async () => {
   const app = await readFile('src.tsx', 'utf8');
   assert.match(app, /MAX_AUDIO_SECONDS = 90 \* 60/);
-  assert.match(app, /MAX_TRANSCRIPTION_FILE_BYTES = 24 \* 1024 \* 1024/);
   assert.match(app, /Number\.isFinite\(audio\.duration\)/);
   assert.match(app, /audio\.currentTime = 1e101/);
-  assert.match(app, /new AudioContext\(\{ sampleRate: 16000 \}\)/);
-  assert.match(app, /is too large for Lectern to split in this browser/);
-  assert.match(app, /0x52494646/);
-  assert.match(app, /repairWav/);
-  assert.match(app, /chunkAudio\(file\)/);
-  assert.match(app, /async function chunkStoredAudio/);
+  assert.doesNotMatch(app, /AudioContext/);
   assert.match(app, /new MediaRecorder\(stream, \{ audioBitsPerSecond: 32000 \}\)/);
   assert.match(app, /channelCount: 1/);
   assert.match(app, /Start recording/);
@@ -275,4 +269,7 @@ test('PowerPoint sources are converted to PDFs in the backend', async () => {
   assert.match(worker, /output_format: 'pdf'/);
   assert.match(worker, /extension\(source\.filename\) === 'pptx' \? await convertPowerPoint/);
   assert.match(worker, /content_type: 'application\/pdf'/);
+  assert.match(worker, /const compactAudio/);
+  assert.match(worker, /output_format: 'mp3'/);
+  assert.match(worker, /audio_bitrate: 32/);
 });

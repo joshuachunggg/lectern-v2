@@ -17,7 +17,6 @@ const NOTE_DETAIL = ["Most concise", "Concise", "Balanced", "Detailed", "Most co
 const MAX_COURSE_MATERIAL_BYTES = 5 * 1024 * 1024;
 const materialSize = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 const MAX_AUDIO_SECONDS = 90 * 60;
-const MAX_TRANSCRIPTION_FILE_BYTES = 24 * 1024 * 1024;
 const AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "wav", "webm", "ogg", "aac", "flac"]);
 const DRAFT_DB = "lectern-recording-draft";
 type RecordingDraft = { audio: Blob; title: string; slideMode: SlideMode; seconds: number };
@@ -68,29 +67,6 @@ const audioDuration = (file: File) => new Promise<number>((resolve, reject) => {
 const isAudio = (file: File) => AUDIO_EXTENSIONS.has(file.name.toLowerCase().split(".").pop() ?? "");
 const isMaterial = (file: File) => ["pdf", "pptx", "txt"].includes(file.name.toLowerCase().split(".").pop() ?? "");
 const isPowerPoint = (file: File) => file.name.toLowerCase().endsWith(".ppt");
-const wavHeader = (samples: number) => {
-  const bytes = new ArrayBuffer(44), view = new DataView(bytes);
-  view.setUint32(0, 0x52494646, false); view.setUint32(4, 36 + samples * 2, true); view.setUint32(8, 0x57415645, false); view.setUint32(12, 0x666d7420, false); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, 16000, true); view.setUint32(28, 32000, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); view.setUint32(36, 0x64617461, false); view.setUint32(40, samples * 2, true);
-  return bytes;
-};
-const wav = (samples: Float32Array, start: number, end: number) => {
-  const bytes = new ArrayBuffer(44 + (end - start) * 2), view = new DataView(bytes); new Uint8Array(bytes).set(new Uint8Array(wavHeader(end - start)));
-  for (let index = start; index < end; index += 1) view.setInt16(44 + (index - start) * 2, Math.max(-1, Math.min(1, samples[index])) * 0x7fff, true);
-  return new Blob([bytes], { type: "audio/wav" });
-};
-const validWav = async (blob: Blob) => new TextDecoder().decode(await blob.slice(0, 4).arrayBuffer()) === "RIFF";
-const repairWav = async (blob: Blob) => new Blob([wavHeader(Math.floor((blob.size - 44) / 2)), await blob.slice(44).arrayBuffer()], { type: "audio/wav" });
-const chunkAudio = async (file: File) => {
-  if (file.size <= MAX_TRANSCRIPTION_FILE_BYTES) return [file];
-  // ponytail: browser decode uses memory; add server-side transcoding only if 90-minute uploads exceed browser capacity.
-  const context = new AudioContext({ sampleRate: 16000 });
-  try {
-    const audio = await context.decodeAudioData(await file.arrayBuffer()), samples = audio.getChannelData(0), chunkSamples = Math.floor((MAX_TRANSCRIPTION_FILE_BYTES - 44) / 2), name = file.name.replace(/\.[^.]+$/, "");
-    return Array.from({ length: Math.ceil(samples.length / chunkSamples) }, (_, index) => new File([wav(samples, index * chunkSamples, Math.min(samples.length, (index + 1) * chunkSamples))], `${name}-${String(index + 1).padStart(2, "0")}.wav`, { type: "audio/wav" }));
-  } catch {
-    throw new Error(`${file.name} is too large for Lectern to split in this browser. Upload a smaller MP3, M4A, WAV, or WebM file.`);
-  } finally { await context.close(); }
-};
 const clock = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${Math.floor(seconds % 60).toString().padStart(2, "0")}`;
 type SlideMode = "text" | "original";
 type Lecture = {
@@ -288,23 +264,6 @@ function App() {
     });
     if (error) throw error;
   }
-  async function chunkStoredAudio(id: string) {
-    const { data: sources, error } = await supabase.from("lecture_sources").select("id,storage_path,filename,content_type,source_type").eq("lecture_id", id);
-    if (error) throw error;
-    for (const source of sources ?? []) {
-      if (source.source_type !== "audio") continue;
-      const { data: blob, error: downloadError } = await supabase.storage.from("lecture-files").download(source.storage_path);
-      if (downloadError || !blob) throw downloadError ?? new Error(`Could not download ${source.filename}.`);
-      const repair = source.content_type === "audio/wav" && !await validWav(blob);
-      if (blob.size <= MAX_TRANSCRIPTION_FILE_BYTES && !repair) continue;
-      setStatus(`Splitting ${source.filename} for transcription…`);
-      const chunks = repair ? [new File([await repairWav(blob)], source.filename, { type: "audio/wav" })] : await chunkAudio(new File([blob], source.filename, { type: source.content_type }));
-      if ((sources?.length ?? 0) - 1 + chunks.length > 12) throw new Error("This lecture becomes more than 12 audio chunks. Split it into fewer recordings.");
-      for (const chunk of chunks) await upload(id, chunk);
-      const { error: deleteError } = await supabase.from("lecture_sources").delete().eq("id", source.id); if (deleteError) throw deleteError;
-      await supabase.storage.from("lecture-files").remove([source.storage_path]);
-    }
-  }
   async function processLecture(
     id: string,
     message: string,
@@ -315,7 +274,6 @@ function App() {
     setStatus(message);
     let poll: ReturnType<typeof window.setInterval> | undefined;
     try {
-      if (!synthesizeOnly) await chunkStoredAudio(id);
       poll = window.setInterval(async () => {
         const { data } = await supabase
           .from("lectures")
@@ -479,7 +437,7 @@ function App() {
     setNotes("");
     setStatus("Preparing audio…");
     try {
-      const uploadSources = (await Promise.all(sources.map(file => isAudio(file) ? chunkAudio(file) : [file]))).flat();
+      const uploadSources = sources;
       if (uploadSources.length > 12) throw new Error("This lecture becomes more than 12 audio chunks. Split it into fewer recordings.");
       setStatus("Creating lecture session…");
       const { data: created, error } = await supabase

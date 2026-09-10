@@ -8,6 +8,7 @@ const transcriptionCost = (usage: any) => ((usage?.input_tokens ?? 0) * 1.25 + (
 const notesCost = (usage: any) => { const cached = usage?.input_tokens_details?.cached_tokens ?? 0; return (((usage?.input_tokens ?? 0) - cached) * .4 + cached * .1 + (usage?.output_tokens ?? 0) * 1.6) / 1_000_000; };
 const allowedAudio = new Set(['mp3', 'm4a', 'wav', 'webm', 'ogg', 'aac', 'flac']);
 const allowedMaterial = new Set(['pdf', 'pptx', 'txt']);
+const MAX_TRANSCRIPTION_FILE_BYTES = 24 * 1024 * 1024;
 const noteDepth = [
   'Be brief: preserve only the central ideas, essential definitions, and a short review.',
   'Use compact notes while retaining the important explanations and examples.',
@@ -18,7 +19,7 @@ const noteDepth = [
 const extension = (name: string) => name.toLowerCase().split('.').pop() ?? '';
 const cloudConvert = async (path: string, init: RequestInit) => {
   const response = await fetch(`https://sync.api.cloudconvert.com/v2${path}`, { ...init, headers: { Authorization: `Bearer ${Deno.env.get('CLOUDCONVERT_API_KEY')}`, ...init.headers } });
-  if (!response.ok) throw new Error(`PowerPoint conversion failed: ${await response.text()}`);
+  if (!response.ok) throw new Error(`File conversion failed: ${await response.text()}`);
   return response.json();
 };
 const convertPowerPoint = async (admin: ReturnType<typeof createClient>, source: any) => {
@@ -36,6 +37,23 @@ const convertPowerPoint = async (admin: ReturnType<typeof createClient>, source:
   if (updateError) throw updateError;
   await admin.storage.from('lecture-files').remove([source.storage_path]);
   return { ...source, storage_path, filename, content_type: 'application/pdf' };
+};
+const compactAudio = async (admin: ReturnType<typeof createClient>, source: any) => {
+  const key = Deno.env.get('CLOUDCONVERT_API_KEY'); if (!key) throw new Error('Large audio uploads require CLOUDCONVERT_API_KEY.');
+  const { data: signed, error: signedError } = await admin.storage.from('lecture-files').createSignedUrl(source.storage_path, 600);
+  if (signedError || !signed) throw signedError ?? new Error(`Could not download ${source.filename}.`);
+  const job = await cloudConvert('/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tasks: { import: { operation: 'import/url', url: signed.signedUrl, filename: source.filename }, convert: { operation: 'convert', input: 'import', input_format: extension(source.filename), output_format: 'mp3', audio_bitrate: 32 }, export: { operation: 'export/url', input: 'convert' } } }) });
+  const output = job.data?.tasks?.find((task: any) => task.name === 'export')?.result?.files?.[0];
+  if (!output?.url) throw new Error('Audio conversion returned no MP3.');
+  const response = await fetch(output.url); if (!response.ok) throw new Error('Could not download converted audio.');
+  const file = await response.blob(); if (file.size > MAX_TRANSCRIPTION_FILE_BYTES) throw new Error('Audio is still too large after compression. Upload a shorter recording.');
+  const storage_path = source.storage_path.replace(/\.[^.]+$/, '.mp3'), filename = source.filename.replace(/\.[^.]+$/, '.mp3');
+  const { error: uploadError } = await admin.storage.from('lecture-files').upload(storage_path, file, { contentType: 'audio/mpeg', upsert: true });
+  if (uploadError) throw uploadError;
+  const { error: updateError } = await admin.from('lecture_sources').update({ storage_path, filename, content_type: 'audio/mpeg' }).eq('id', source.id);
+  if (updateError) throw updateError;
+  await admin.storage.from('lecture-files').remove([source.storage_path]);
+  return { ...source, storage_path, filename, content_type: 'audio/mpeg' };
 };
 const base64 = (bytes: Uint8Array) => {
   let binary = ''; for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
@@ -91,7 +109,9 @@ Deno.serve(async request => {
       if (source.source_type === 'audio') {
         const { data: audioUrl } = transcriptionProvider === 'groq' ? await admin.storage.from('lecture-files').createSignedUrl(source.storage_path, 3600) : { data: null };
         const { data: file, error } = audioUrl ? { data: null, error: null } : await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file && !audioUrl) throw new Error(error ? errorMessage(error) : `Could not download ${source.filename}.`);
-        const result = await transcribe(file, source.filename, audioUrl?.signedUrl); const seconds = Math.ceil(Number((result.usage as any).seconds)); if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Transcription provider returned an invalid audio duration.'); transcripts.push(result.text); audioSeconds += seconds; transcriptionUsage.push(result.usage); estimatedCost += result.cost;
+        const material = file && file.size > MAX_TRANSCRIPTION_FILE_BYTES ? await compactAudio(admin, source) : source;
+        const audioFile = material === source ? file : (await admin.storage.from('lecture-files').download(material.storage_path)).data;
+        const result = await transcribe(audioFile, material.filename, material === source ? audioUrl?.signedUrl : undefined); const seconds = Math.ceil(Number((result.usage as any).seconds)); if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Transcription provider returned an invalid audio duration.'); transcripts.push(result.text); audioSeconds += seconds; transcriptionUsage.push(result.usage); estimatedCost += result.cost;
         const { error: sourceError } = await admin.from('lecture_sources').update({ transcript: result.text, duration_seconds: seconds }).eq('id', source.id); if (sourceError) throw new Error(errorMessage(sourceError));
         const { error: lectureError } = await admin.from('lectures').update({ transcript: transcripts.join('\n\n'), api_usage: { ...lecture.api_usage, transcription: transcriptionUsage }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id); if (lectureError) throw new Error(errorMessage(lectureError));
       }
