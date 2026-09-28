@@ -4,6 +4,13 @@ const openai = (path: string, init: RequestInit) => fetch(`https://api.openai.co
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 const fail = (message: string) => new Response(JSON.stringify({ error: message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error && typeof error.message === 'string' ? error.message : 'Processing failed.';
+const userMessage = (error: unknown) => {
+  const message = errorMessage(error);
+  if (/file_data|empty base64|empty.*bytes/i.test(message)) return 'One of your slide files is empty or could not be read. Remove it, upload a fresh copy, and try again.';
+  if (/Note synthesis failed|Transcription failed|Groq transcription failed/i.test(message)) return 'We could not process your lecture right now. Please try again in a moment.';
+  if (/^(Upload lecture audio|Create a new lecture|Upload up to|Could not confirm your lecture allowance|No saved transcript|Text materials|Audio is still too large|Restore this lecture)/.test(message)) return message;
+  return 'We could not process your lecture right now. Please try again in a moment.';
+};
 const transcriptionCost = (usage: any) => ((usage?.input_tokens ?? 0) * 1.25 + (usage?.output_tokens ?? 0) * 5) / 1_000_000;
 const notesCost = (usage: any) => { const cached = usage?.input_tokens_details?.cached_tokens ?? 0; return (((usage?.input_tokens ?? 0) - cached) * .4 + cached * .1 + (usage?.output_tokens ?? 0) * 1.6) / 1_000_000; };
 const allowedAudio = new Set(['mp3', 'm4a', 'wav', 'webm', 'ogg', 'aac', 'flac']);
@@ -117,7 +124,7 @@ Deno.serve(async request => {
       }
       else {
         const material = extension(source.filename) === 'pptx' ? await convertPowerPoint(admin, source) : source;
-        const { data: file, error } = await admin.storage.from('lecture-files').download(material.storage_path); if (error || !file) throw new Error(error ? errorMessage(error) : `Could not download ${material.filename}.`);
+        const { data: file, error } = await admin.storage.from('lecture-files').download(material.storage_path); if (error || !file) throw new Error(error ? errorMessage(error) : `Could not download ${material.filename}.`); if (!file.size) throw new Error(`${material.filename} has empty bytes.`);
         if (lecture.slide_mode === 'original' || !material.filename.endsWith('.txt')) files.push({ type: 'input_file', file_data: `data:${material.content_type};base64,${base64(new Uint8Array(await file.arrayBuffer()))}`, filename: material.filename });
         else { const text = await file.text(); if (text.length > 100_000) throw new Error('Text materials must be 100,000 characters or fewer.'); materials.push(`## ${material.filename}\n${text}`); }
       }
@@ -136,5 +143,5 @@ Deno.serve(async request => {
     if (!notes) throw new Error(`Note synthesis returned no text${result.incomplete_details?.reason ? ` (${result.incomplete_details.reason})` : ''}.`);
     await admin.from('lectures').update({ status: 'done', status_message: 'Study notes are ready.', notes, api_usage: { transcription: transcriptionUsage, notes: result.usage ?? {} }, estimated_cost_usd: estimatedCost }).eq('id', lecture_id);
     return Response.json({ status: 'done' }, { headers: corsHeaders });
-  } catch (error) { const message = errorMessage(error); console.error({ lecture_id, message }); if (noteRunClaimed) await admin.rpc('release_note_run', { p_lecture_id: lecture_id, p_owner_id: user.id }); if (!synthesize_only) await admin.rpc('release_lecture_reservation', { p_lecture_id: lecture_id, p_owner_id: user.id }); await admin.from('lectures').update({ status: 'error', status_message: message }).eq('id', lecture_id); return fail(message); }
+  } catch (error) { const message = userMessage(error); console.error({ lecture_id, error: errorMessage(error) }); if (noteRunClaimed) await admin.rpc('release_note_run', { p_lecture_id: lecture_id, p_owner_id: user.id }); if (!synthesize_only) await admin.rpc('release_lecture_reservation', { p_lecture_id: lecture_id, p_owner_id: user.id }); await admin.from('lectures').update({ status: 'error', status_message: message }).eq('id', lecture_id); return fail(message); }
 });

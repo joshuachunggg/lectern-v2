@@ -85,6 +85,15 @@ type Lecture = {
 type SavedPrompt = { id: string; name: string; prompt: string };
 type MaterialSource = { id: string; storage_path: string; filename: string; size: number };
 type Billing = { active: boolean; included_seconds: number; overage_seconds: number; credit_cents: number; free_used: boolean; cancel_at: string | null };
+type ErrorNotice = { title: string; message: string };
+const friendlyError = (error: unknown): ErrorNotice => {
+  const message = error instanceof Error ? error.message : "";
+  if (/empty|file_data|could not be read/i.test(message)) return { title: "Check your slide file", message: "One of your slide files is empty or could not be read. Remove it, upload a fresh copy, and try again." };
+  if (/audio|required|microphone/i.test(message)) return { title: "Add lecture audio", message: "Upload a lecture recording, or allow microphone access and record it in Lectern." };
+  if (/90 minutes|too large|shorter recording/i.test(message)) return { title: "Use a shorter recording", message: "A lecture can contain up to 90 minutes of audio. Split the recording into shorter files and try again." };
+  if (/processing|transcription|synthesis|provider|network|fetch/i.test(message)) return { title: "We couldn't finish your notes", message: "Your files are still saved. Please try processing again in a moment." };
+  return { title: "Something went wrong", message: "We couldn't complete that action. Please try again." };
+};
 
 function App() {
   const marketingAppUrl = import.meta.env.VITE_APP_URL as string | undefined;
@@ -97,6 +106,7 @@ function App() {
     contentDialog = useRef<HTMLDialogElement | null>(null),
     promptDialog = useRef<HTMLDialogElement | null>(null),
     pricingDialog = useRef<HTMLDialogElement | null>(null),
+    errorDialog = useRef<HTMLDialogElement | null>(null),
     submitting = useRef(false);
   const [user, setUser] = useState<string | null>(null),
     [email, setEmail] = useState(""),
@@ -141,6 +151,13 @@ function App() {
     [transcript, setTranscript] = useState(""),
     [showTranscript, setShowTranscript] = useState(false),
     [copied, setCopied] = useState(false);
+  const [errorNotice, setErrorNotice] = useState<ErrorNotice | null>(null);
+  const showError = (error: unknown) => {
+    const notice = friendlyError(error);
+    setErrorNotice(notice);
+    setStatus(notice.message);
+    requestAnimationFrame(() => { if (!errorDialog.current?.open) errorDialog.current?.showModal(); });
+  };
   useEffect(() => {
     const closeProfile = (event: PointerEvent) => {
       if (profileMenu.current?.open && !profileMenu.current.contains(event.target as Node)) profileMenu.current.open = false;
@@ -302,9 +319,7 @@ function App() {
       if (data?.notes) openNotes(data);
       if (data?.status_message) setStatus(data.status_message);
     } catch (error) {
-      setStatus(
-        error instanceof Error ? error.message : "Could not process lecture.",
-      );
+      showError(error);
       throw error;
     } finally {
       if (poll) clearInterval(poll);
@@ -464,11 +479,7 @@ function App() {
       setFiles([]);
       setMaterials("");
     } catch (error) {
-      setStatus(
-        error instanceof Error
-          ? error.message
-          : "Could not create the lecture session.",
-      );
+      showError(error);
       setProcessing(false);
     } finally { submitting.current = false; }
   }
@@ -518,7 +529,7 @@ function App() {
       contentDialog.current?.close();
       await processLecture(contentSession.id, "Rebuilding study notes…", true);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Could not rebuild the notes.");
+      showError(error);
       setProcessing(false);
     }
   }
@@ -997,6 +1008,14 @@ function App() {
           <section><p className="eyebrow">Free</p><h3>Try one lecture</h3><p>Get one free lecture, including your finished study notes.</p></section>
           <section className="paid-plan"><p className="eyebrow">Lectern plan</p><h3>$10 / month</h3><p>30 audio hours each month. After that, audio is $0.50 per hour from your prepaid balance.</p><button onClick={openStripeBilling}>Upgrade to Lectern</button></section>
         </div>
+      </dialog>
+      <dialog className="modal error-modal" ref={errorDialog} aria-labelledby="error-title">
+        <div className="modal-heading">
+          <h2 id="error-title">{errorNotice?.title}</h2>
+          <button type="button" onClick={() => errorDialog.current?.close()}>Close</button>
+        </div>
+        <p>{errorNotice?.message}</p>
+        <button onClick={() => errorDialog.current?.close()}>Got it</button>
       </dialog>
       {notes && (
         <dialog

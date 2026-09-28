@@ -720,6 +720,9 @@ footer {
 .pricing-options h3 { margin: 5px 0 8px; font: 25px Georgia, serif; }
 .pricing-options p:not(.eyebrow) { margin: 0; color: #526061; font-size: 14px; line-height: 1.45; }
 .pricing-options button { margin-top: 14px; }
+.error-modal { width: min(440px, calc(100% - 32px)); }
+.error-modal p { margin: 18px 0 0; color: #526061; font-size: 15px; line-height: 1.5; }
+.error-modal > button { margin-top: 22px; }
 .notes {
   width: min(860px, calc(100% - 32px));
   max-width: 860px;

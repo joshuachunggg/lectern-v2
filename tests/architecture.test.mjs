@@ -94,6 +94,18 @@ test('processing resumes from completed source transcriptions', async () => {
   assert.match(app, /closeProfile/);
 });
 
+test('processing errors are translated into an actionable dialog', async () => {
+  const app = await readFile('src.tsx', 'utf8');
+  const worker = await readFile('supabase/functions/process-lecture/index.ts', 'utf8');
+  assert.match(app, /const friendlyError/);
+  assert.match(app, /Check your slide file/);
+  assert.match(app, /className="modal error-modal"/);
+  assert.match(app, /showError\(error\)/);
+  assert.match(worker, /const userMessage/);
+  assert.match(worker, /empty base64/);
+  assert.match(worker, /if \(!file\.size\) throw new Error/);
+});
+
 test('saved sessions can be deleted with their uploaded source files', async () => {
   const app = await readFile('src.tsx', 'utf8');
   const softDeleteMigration = await readFile('supabase/migrations/20260902000000_soft_delete_lectures.sql', 'utf8');
