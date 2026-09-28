@@ -206,7 +206,7 @@ small {
 }
 .workspace {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 .card {
@@ -307,6 +307,7 @@ small {
   margin: 8px 0 18px;
   color: #697473;
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 button {
   border: 1px solid var(--orange-dark);

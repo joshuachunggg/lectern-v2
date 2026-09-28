@@ -114,9 +114,9 @@ Deno.serve(async request => {
       if (synthesize_only && source.source_type === 'audio') continue;
       if (source.source_type === 'audio' && source.transcript) { transcripts.push(source.transcript); audioSeconds += source.duration_seconds ?? 0; continue; }
       if (source.source_type === 'audio') {
-        const { data: audioUrl } = transcriptionProvider === 'groq' ? await admin.storage.from('lecture-files').createSignedUrl(source.storage_path, 3600) : { data: null };
-        const { data: file, error } = audioUrl ? { data: null, error: null } : await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file && !audioUrl) throw new Error(error ? errorMessage(error) : `Could not download ${source.filename}.`);
-        const material = file && file.size > MAX_TRANSCRIPTION_FILE_BYTES ? await compactAudio(admin, source) : source;
+        const { data: file, error } = await admin.storage.from('lecture-files').download(source.storage_path); if (error || !file) throw new Error(error ? errorMessage(error) : `Could not download ${source.filename}.`);
+        const material = file.size > MAX_TRANSCRIPTION_FILE_BYTES ? await compactAudio(admin, source) : source;
+        const { data: audioUrl } = material === source && transcriptionProvider === 'groq' ? await admin.storage.from('lecture-files').createSignedUrl(source.storage_path, 3600) : { data: null };
         const audioFile = material === source ? file : (await admin.storage.from('lecture-files').download(material.storage_path)).data;
         const result = await transcribe(audioFile, material.filename, material === source ? audioUrl?.signedUrl : undefined); const seconds = Math.ceil(Number((result.usage as any).seconds)); if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Transcription provider returned an invalid audio duration.'); transcripts.push(result.text); audioSeconds += seconds; transcriptionUsage.push(result.usage); estimatedCost += result.cost;
         const { error: sourceError } = await admin.from('lecture_sources').update({ transcript: result.text, duration_seconds: seconds }).eq('id', source.id); if (sourceError) throw new Error(errorMessage(sourceError));

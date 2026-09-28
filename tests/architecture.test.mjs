@@ -106,6 +106,16 @@ test('processing errors are translated into an actionable dialog', async () => {
   assert.match(worker, /if \(!file\.size\) throw new Error/);
 });
 
+test('large Groq audio is compressed before it is sent for transcription', async () => {
+  const worker = await readFile('supabase/functions/process-lecture/index.ts', 'utf8');
+  const style = await readFile('style.css', 'utf8');
+  assert.match(worker, /const \{ data: file, error \} = await admin\.storage\.from\('lecture-files'\)\.download\(source\.storage_path\)/);
+  assert.match(worker, /const material = file\.size > MAX_TRANSCRIPTION_FILE_BYTES \? await compactAudio/);
+  assert.match(worker, /material === source && transcriptionProvider === 'groq'/);
+  assert.match(style, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(style, /overflow-wrap: anywhere/);
+});
+
 test('saved sessions can be deleted with their uploaded source files', async () => {
   const app = await readFile('src.tsx', 'utf8');
   const softDeleteMigration = await readFile('supabase/migrations/20260902000000_soft_delete_lectures.sql', 'utf8');
