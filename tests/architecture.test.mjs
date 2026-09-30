@@ -243,6 +243,7 @@ test('recorded and uploaded audio is capped at a lecture length and prepared for
   assert.match(app, /Pause recording/);
   assert.match(app, /at most 90 minutes of audio/);
   assert.match(worker, /audio_bitrate: 32, audio_channels: 1/);
+  assert.match(worker, /if \(storage_path !== source\.storage_path\) await admin\.storage\.from\('lecture-files'\)\.remove/);
 });
 
 test('free users can compare plans and view finished transcripts', async () => {

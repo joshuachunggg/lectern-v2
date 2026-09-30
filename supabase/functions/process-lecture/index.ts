@@ -59,7 +59,7 @@ const compactAudio = async (admin: ReturnType<typeof createClient>, source: any)
   if (uploadError) throw uploadError;
   const { error: updateError } = await admin.from('lecture_sources').update({ storage_path, filename, content_type: 'audio/mpeg' }).eq('id', source.id);
   if (updateError) throw updateError;
-  await admin.storage.from('lecture-files').remove([source.storage_path]);
+  if (storage_path !== source.storage_path) await admin.storage.from('lecture-files').remove([source.storage_path]);
   return { ...source, storage_path, filename, content_type: 'audio/mpeg' };
 };
 const base64 = (bytes: Uint8Array) => {
