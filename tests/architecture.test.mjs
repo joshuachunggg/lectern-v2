@@ -230,6 +230,7 @@ test('only the backend can set billing and processing fields', async () => {
 
 test('recorded and uploaded audio is capped at a lecture length and prepared for transcription', async () => {
   const app = await readFile('src.tsx', 'utf8');
+  const worker = await readFile('supabase/functions/process-lecture/index.ts', 'utf8');
   assert.match(app, /MAX_AUDIO_SECONDS = 90 \* 60/);
   assert.match(app, /Number\.isFinite\(audio\.duration\)/);
   assert.match(app, /audio\.currentTime = 1e101/);
@@ -241,6 +242,7 @@ test('recorded and uploaded audio is capped at a lecture length and prepared for
   assert.match(app, /current\.resume\(\)/);
   assert.match(app, /Pause recording/);
   assert.match(app, /at most 90 minutes of audio/);
+  assert.match(worker, /audio_bitrate: 32, audio_channels: 1/);
 });
 
 test('free users can compare plans and view finished transcripts', async () => {

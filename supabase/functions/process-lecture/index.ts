@@ -49,7 +49,7 @@ const compactAudio = async (admin: ReturnType<typeof createClient>, source: any)
   const key = Deno.env.get('CLOUDCONVERT_API_KEY'); if (!key) throw new Error('Large audio uploads require CLOUDCONVERT_API_KEY.');
   const { data: signed, error: signedError } = await admin.storage.from('lecture-files').createSignedUrl(source.storage_path, 600);
   if (signedError || !signed) throw signedError ?? new Error(`Could not download ${source.filename}.`);
-  const job = await cloudConvert('/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tasks: { import: { operation: 'import/url', url: signed.signedUrl, filename: source.filename }, convert: { operation: 'convert', input: 'import', input_format: extension(source.filename), output_format: 'mp3', audio_bitrate: 32 }, export: { operation: 'export/url', input: 'convert' } } }) });
+  const job = await cloudConvert('/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tasks: { import: { operation: 'import/url', url: signed.signedUrl, filename: source.filename }, convert: { operation: 'convert', input: 'import', input_format: extension(source.filename), output_format: 'mp3', audio_bitrate: 32, audio_channels: 1 }, export: { operation: 'export/url', input: 'convert' } } }) });
   const output = job.data?.tasks?.find((task: any) => task.name === 'export')?.result?.files?.[0];
   if (!output?.url) throw new Error('Audio conversion returned no MP3.');
   const response = await fetch(output.url); if (!response.ok) throw new Error('Could not download converted audio.');
